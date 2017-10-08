@@ -1,5 +1,3 @@
-set(ExampleName "laplace_equation")
-
 add_executable(${ExampleName} ${ExampleName}.F90)
 
 target_link_libraries(${ExampleName} PRIVATE opencmisslibs mpi)
