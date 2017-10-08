@@ -14,9 +14,9 @@ using the Galerkin Finite Element method. |phi| is a spatially varying scalar fi
 
 |laplacian_equation|.
 
-The generalised Laplace equation
+The generalised Laplace equation,
 
-|generalised_laplace_equation|,
+|generalised_laplace_equation|
 
 where |conductivity_tensor| is the rank two, positive definite and symmetric conductivity tensor, can be reduced to the standard Laplace equation by setting |equation| (identity tensor).
 
