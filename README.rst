@@ -4,73 +4,109 @@
 Laplace Equation
 ================
 
-This example solves the weak form of the standard Laplace equation,
+This example solves the weak form of the standard Laplace equation, 
 
-|laplace_equation1|
+|standard_laplace_equation| 
 
-using the Galerkin Finite Element method. |conductivity_tensor| and |phi| are the rank two conductivity tensor and a scalar field (e.g. temperature) respectively. A homogeneous and isotropic material with |equation1| (identity tensor) is considered in this example. As a result, |conductivity_tensor| in the above equation becomes redundant and the equation reduces to
+using the Galerkin Finite Element method. |phi| is a spatially varying scalar field (e.g. potential). |nabla| and |laplacian| are 'nabla' (divergence operator) and 'laplacian' (laplace operator) respectively and given by,
 
-|laplace_equation2|.
+|nabla_equation|
 
-Only Dirichlet boundary conditions are prescribed.
+|laplacian_equation|.
 
-.. |laplace_equation1| image:: ./images/laplace_equation1.svg
-   :align: middle
+The generalised Laplace equation
 
-.. |conductivity_tensor| image:: ./images/conductivity_tensor.svg 
-   :align: middle
+|generalised_laplace_equation|
 
-.. |phi| image:: ./images/field_scalar.svg
-   :align: middle
-   
-.. |equation1| image:: ./images/equation1.svg
-   :align: middle
+where |conductivity_tensor| is the rank two, positive definite and symmetric conductivity tensor, reduces to the standard Laplace equation by setting |equation| (identity tensor).
 
-.. |laplace_equation2| image:: ./images/laplace_equation2.svg
+
+Only Dirichlet boundary conditions are prescribed in this example.
+
+.. |standard_laplace_equation| image:: ./docs/images/standard_laplace_equation.svg
    :align: middle
    
+.. |phi| image:: ./docs/images/phi.svg
+   :align: middle   
+   
+.. |nabla| image:: ./docs/images/nabla.svg
+   :align: middle
+   
+.. |laplacian| image:: ./docs/images/laplacian.svg
+   :align: middle
+   
+.. |nabla_equation| image:: ./docs/images/nabla_equation.svg
+   :align: middle
+   
+.. |laplacian_equation| image:: ./docs/images/laplacian_equation.svg
+   :align: middle
+   
+.. |generalised_laplace_equation| image:: ./docs/images/generalised_laplace_equation.svg
+   :align: middle
+   
+.. |conductivity_tensor| image:: ./docs/images/conductivity_tensor.svg
+   :align: middle
+   
+.. |equation| image:: ./docs/images/equation.svg 
+   :align: middle  
+   
+.. |dphi_dn| image:: ./docs/images/dphi_dn.svg 
+   :align: middle  
+  
 Building the example
 ====================
 
 The fortran version of the example can be configured and built with CMake::
 
-  mkdir examples
-  cd examples
   git clone https://github.com/OpenCMISS-Examples/laplace_equation
-  cd laplace_equation
-  cmake -DOpenCMISSLibs_DIR=/path/to/opencmisslib/install
+  mkdir laplace_equation-build
+  cd laplace_equation-build
+  cmake -DOpenCMISSLibs_DIR=/path/to/opencmisslib/install ../laplace_equation
   make
+
+This will create the example executable "laplace_equation" in ./src/fortran/ directory.
 
 Running the example
 ===================
 
 Fortran version::
 
-  cd src/fortran
+  cd ./src/fortran/
   ./laplace_equation
 
 Python version::
 
-  cd src/python
-  PYTHONPATH="/path/to/opencmisslibs/install/.../.../Release/opencmiss.iron" python laplace_equation.py   
+  cd ./laplace_equation/src/python
+  source  /path/to/opencmisslibs/install/.../.../virtualenvironments/oclibs_pyXY_release/bin/activate
+  python laplace_equation.py
   
-The results can be visualised by running `visualise.com <./src/fortran/visualise.com>`_ with the `Cmgui visualiser <http://physiomeproject.org/software/opencmiss/cmgui/download>`_.
+  Note: If the above fails, try the following.
+  cd ./laplace_equation/src/python
+  PYTHONPATH="/path/to/opencmisslibs/install/.../.../Release/opencmiss.iron" python laplace_equation.py  
 
-The following figure shows the finite element mesh (computational domain) and solution (scalar field variable, |phi|).  
+Results can be visualised by running `visualise.com <./src/fortran/visualise.com>`_ with the `Cmgui visualiser <http://physiomeproject.org/software/opencmiss/cmgui/download>`_.
+
+The following figure shows the finite element mesh (computational domain) and solutions (|phi| and |dphi_dn|).  
  
-.. |figure1a| image:: ./images/mesh.svg
+.. |figure1a| image:: ./docs/images/mesh.svg
    :align: middle
-   :width: 300
+   :width: 250
    :scale: 100
    
-.. |figure1b| image:: ./images/field_solution.svg
+.. |figure1b| image:: ./docs/images/solution_phi.svg
    :align: middle  
-   :width: 300
+   :width: 250
    :scale: 100
+   
+.. |figure1c| image:: ./docs/images/solution_dphi_dn.svg
+   :align: middle  
+   :width: 250
+   :scale: 100   
+   
     
-|figure1a|  |figure1b|  
+|figure1a|  |figure1b|  |figure1c|
 
-Figure 1. (a) Finite element mesh (b) Solution
+Figure 1. (a) Finite element mesh (b) Primary variable solution (c) Secondary variable solution
     
 Prerequisites
 =============

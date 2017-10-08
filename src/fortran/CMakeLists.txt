@@ -1,5 +1,9 @@
-add_executable(laplace_equation laplace_equation.F90)
+set(ExampleName "laplace_equation")
 
-target_link_libraries(laplace_equation PRIVATE opencmisslibs mpi)
+add_executable(${ExampleName} ${ExampleName}.F90)
 
-install(TARGETS laplace_equation DESTINATION bin)
+target_link_libraries(${ExampleName} PRIVATE opencmisslibs mpi)
+
+install(TARGETS ${ExampleName} DESTINATION bin)
+
+configure_file(./visualise.com ../../../${ExampleName}-build/src/fortran/visualise.com)

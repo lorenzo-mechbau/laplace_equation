@@ -1,13 +1,15 @@
-gfx read node laplace_equation.part0.exnode;
-gfx read elem laplace_equation.part0.exelem;
+$name = "laplace_equation";
 
-gfx def faces egroup laplace_equation;
+gfx read node $name.part0.exnode;
+gfx read elem $name.part0.exelem;
 
-gfx modify g_element laplace_equation general clear circle_discretization 6 default_coordinate Coordinate element_discretization "4*4*4" native_discretization none;
-gfx modify g_element laplace_equation lines select_on invisible material default selected_material default_selected;
-gfx modify g_element laplace_equation surfaces select_on material default data Phi spectrum default selected_material default_selected render_shaded;
-gfx modify g_element laplace_equation node_points glyph sphere general size "0.025*0.025*0.025" centre 0,0,0 font default label cmiss_number select_on material blue selected_material default_selected;
-gfx modify g_element laplace_equation cylinders constant_radius 0.005 select_on material gold selected_material default_selected render_shaded;
+gfx def faces egroup $name;
+
+gfx modify g_element $name general clear circle_discretization 6 default_coordinate Coordinate element_discretization "4*4*4" native_discretization none;
+gfx modify g_element $name lines select_on invisible material default selected_material default_selected;
+gfx modify g_element $name surfaces select_on material default data Phi spectrum default selected_material default_selected render_shaded;
+gfx modify g_element $name node_points glyph sphere general size "0.025*0.025*0.025" centre 0,0,0 font default label cmiss_number select_on material blue selected_material default_selected;
+gfx modify g_element $name cylinders constant_radius 0.005 select_on material gold selected_material default_selected render_shaded;
 
 gfx create window 1 double_buffer;
 gfx modify window 1 image scene default light_model default;
