@@ -4,4 +4,4 @@ target_link_libraries(${ExampleName} PRIVATE opencmisslibs mpi)
 
 install(TARGETS ${ExampleName} DESTINATION bin)
 
-configure_file(./visualise.com ../../../${ExampleName}-build/src/fortran/visualise.com)
+configure_file(visualise.com visualise.com)
