@@ -27,13 +27,13 @@ Only Dirichlet boundary conditions are prescribed in this example.
    :align: middle
    
 .. |phi| image:: ./docs/images/phi.svg
-   :align: middle   
+   :align: bottom   
    
 .. |nabla| image:: ./docs/images/nabla.svg
-   :align: middle
+   :align: bottom
    
 .. |laplacian| image:: ./docs/images/laplacian.svg
-   :align: middle
+   :align: bottom
    
 .. |nabla_equation| image:: ./docs/images/nabla_equation.svg
    :align: middle
