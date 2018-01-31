@@ -1,6 +1,13 @@
 
-
 ================
+Laplace Equation
+================
+
+Test cases for new implementation of domain mappings of elements, nodes and dofs that avoid the GLOBAL_TO_LOCAL_MAP. See Opencmiss iron issue #111.
+
+.. |nabla| image:: ./docs/PartitionedMesh_4x4-new.pdf
+   :align: middle
+   
 Laplace Equation
 ================
 
