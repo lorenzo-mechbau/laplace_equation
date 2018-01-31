@@ -5,7 +5,43 @@ Laplace Equation
 
 Test cases for new implementation of domain mappings of elements, nodes and dofs that avoid the GLOBAL_TO_LOCAL_MAP. See Opencmiss iron issue #111.
 
-.. |nabla| image:: ./docs/PartitionedMesh_4x4-new.pdf
+dark green: internal elements/nodes
+light green: ghost elements/nodes
+red: boundary nodes
+
+2 Processes, 1 field variable with 2 components, 2x node based dofs
+
+|p2|
+
+2 Processes, 1 field variable with 3 components, 2x node based dofs, 1x element based dofs
+
+|p23|
+
+3 Processes, 1 field variable with 2 components, 2x node based dofs
+
+|p3|
+
+3 Processes, 1 field variable with 3 components, 2x node based dofs, 1x element based dofs
+
+|p33|
+
+4 Processes
+
+|p4|
+
+.. |p2| image:: ./docs/images/PartitionedMesh_4x4b.svg
+   :align: middle
+   
+.. |p23| image:: ./docs/images/PartitionedMesh_4x4c.svg
+   :align: middle
+   
+.. |p3| image:: ./docs/images/PartitionedMesh_4x4-3.svg
+   :align: middle
+   
+.. |p33| image:: ./docs/images/PartitionedMesh_4x4-3a.svg
+   :align: middle
+   
+.. |p4| image:: ./docs/images/PartitionedMesh_4x4-2c.svg
    :align: middle
    
 Laplace Equation
