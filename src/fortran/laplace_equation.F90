@@ -28,26 +28,25 @@ PROGRAM LAPLACE_EQUATION
 
   INTEGER(CMISSIntg), PARAMETER :: CoordinateSystemUserNumber=1
   INTEGER(CMISSIntg), PARAMETER :: RegionUserNumber=2
-  INTEGER(CMISSIntg), PARAMETER :: BasisUserNumber=3
-  INTEGER(CMISSIntg), PARAMETER :: GeneratedMeshUserNumber=4
-  INTEGER(CMISSIntg), PARAMETER :: MeshUserNumber=5
-  INTEGER(CMISSIntg), PARAMETER :: DecompositionUserNumber=6
-  INTEGER(CMISSIntg), PARAMETER :: GeometricFieldUserNumber=7
-  INTEGER(CMISSIntg), PARAMETER :: EquationsSetFieldUserNumber=8
-  INTEGER(CMISSIntg), PARAMETER :: DependentFieldUserNumber=9
-  INTEGER(CMISSIntg), PARAMETER :: EquationsSetUserNumber=10
-  INTEGER(CMISSIntg), PARAMETER :: ProblemUserNumber=11
+  INTEGER(CMISSIntg), PARAMETER :: LinearBasisUserNumber=3
+  INTEGER(CMISSIntg), PARAMETER :: HermiteBasisUserNumber=4
+  INTEGER(CMISSIntg), PARAMETER :: MeshUserNumber=6
+  INTEGER(CMISSIntg), PARAMETER :: DecompositionUserNumber=7
+  INTEGER(CMISSIntg), PARAMETER :: GeometricFieldUserNumber=8
+  INTEGER(CMISSIntg), PARAMETER :: EquationsSetFieldUserNumber=9
+  INTEGER(CMISSIntg), PARAMETER :: DependentFieldUserNumber=10
+  INTEGER(CMISSIntg), PARAMETER :: EquationsSetUserNumber=11
+  INTEGER(CMISSIntg), PARAMETER :: ProblemUserNumber=12
  
   !Program types
   
   !Program variables
-  INTEGER(CMISSIntg) :: NUMBER_OF_ARGUMENTS,ARGUMENT_LENGTH,STATUS
-  INTEGER(CMISSIntg) :: NUMBER_GLOBAL_X_ELEMENTS,NUMBER_GLOBAL_Y_ELEMENTS,NUMBER_GLOBAL_Z_ELEMENTS, &
-    & INTERPOLATION_TYPE,NUMBER_OF_GAUSS_XI
-  CHARACTER(LEN=255) :: COMMAND_ARGUMENT,Filename
+  INTEGER(CMISSIntg) :: RowNo, ColumnNo, GlobalElementNo, GlobalNodeNo, I
+  INTEGER(CMISSIntg) :: NumberOfElements, NumberOfNodes
 
   !CMISS variables
-  TYPE(cmfe_BasisType) :: Basis
+  TYPE(cmfe_BasisType) :: LinearBasis
+  TYPE(cmfe_BasisType) :: HermiteBasis
   TYPE(cmfe_BoundaryConditionsType) :: BoundaryConditions
   TYPE(cmfe_CoordinateSystemType) :: CoordinateSystem,WorldCoordinateSystem
   TYPE(cmfe_DecompositionType) :: Decomposition
@@ -55,13 +54,13 @@ PROGRAM LAPLACE_EQUATION
   TYPE(cmfe_EquationsSetType) :: EquationsSet
   TYPE(cmfe_FieldType) :: GeometricField,EquationsSetField,DependentField
   TYPE(cmfe_FieldsType) :: Fields
-  TYPE(cmfe_GeneratedMeshType) :: GeneratedMesh  
   TYPE(cmfe_MeshType) :: Mesh
   TYPE(cmfe_NodesType) :: Nodes
   TYPE(cmfe_ProblemType) :: Problem
   TYPE(cmfe_RegionType) :: Region,WorldRegion
   TYPE(cmfe_SolverType) :: Solver
   TYPE(cmfe_SolverEquationsType) :: SolverEquations
+  TYPE(cmfe_MeshElementsType) :: MeshElements
 
 #ifdef WIN32
   !Quickwin type
@@ -75,6 +74,7 @@ PROGRAM LAPLACE_EQUATION
   INTEGER(CMISSIntg) :: FirstNodeNumber,LastNodeNumber
   INTEGER(CMISSIntg) :: FirstNodeDomain,LastNodeDomain
   INTEGER(CMISSIntg) :: Err
+  LOGICAL :: SetDecompositionDistributed
   
 #ifdef WIN32
   !Initialise QuickWin
@@ -87,56 +87,29 @@ PROGRAM LAPLACE_EQUATION
   IF(.NOT.QUICKWIN_STATUS) QUICKWIN_STATUS=SETWINDOWCONFIG(QUICKWIN_WINDOW_CONFIG)
 #endif
 
-  !-----------------------------------------------------------------------------------------------------------
-  ! PROBLEM CONTROL PANEL
-  !-----------------------------------------------------------------------------------------------------------
-
-  NUMBER_OF_ARGUMENTS = COMMAND_ARGUMENT_COUNT()
-  IF(NUMBER_OF_ARGUMENTS >= 4) THEN
-    !If we have enough arguments then use the first four for setting up the problem. The subsequent arguments may be used to
-    !pass flags to, say, PETSc.
-    CALL GET_COMMAND_ARGUMENT(1,COMMAND_ARGUMENT,ARGUMENT_LENGTH,STATUS)
-    IF(STATUS>0) CALL HANDLE_ERROR("Error for command argument 1.")
-    READ(COMMAND_ARGUMENT(1:ARGUMENT_LENGTH),*) NUMBER_GLOBAL_X_ELEMENTS
-    IF(NUMBER_GLOBAL_X_ELEMENTS<=0) CALL HANDLE_ERROR("Invalid number of X elements.")
-    CALL GET_COMMAND_ARGUMENT(2,COMMAND_ARGUMENT,ARGUMENT_LENGTH,STATUS)
-    IF(STATUS>0) CALL HANDLE_ERROR("Error for command argument 2.")
-    READ(COMMAND_ARGUMENT(1:ARGUMENT_LENGTH),*) NUMBER_GLOBAL_Y_ELEMENTS
-    IF(NUMBER_GLOBAL_Y_ELEMENTS<=0) CALL HANDLE_ERROR("Invalid number of Y elements.")
-    CALL GET_COMMAND_ARGUMENT(3,COMMAND_ARGUMENT,ARGUMENT_LENGTH,STATUS)
-    IF(STATUS>0) CALL HANDLE_ERROR("Error for command argument 3.")
-    READ(COMMAND_ARGUMENT(1:ARGUMENT_LENGTH),*) NUMBER_GLOBAL_Z_ELEMENTS
-    IF(NUMBER_GLOBAL_Z_ELEMENTS<0) CALL HANDLE_ERROR("Invalid number of Z elements.")
-    CALL GET_COMMAND_ARGUMENT(4,COMMAND_ARGUMENT,ARGUMENT_LENGTH,STATUS)
-    IF(STATUS>0) CALL HANDLE_ERROR("Error for command argument 4.")
-    READ(COMMAND_ARGUMENT(1:ARGUMENT_LENGTH),*) INTERPOLATION_TYPE
-    IF(INTERPOLATION_TYPE<=0) CALL HANDLE_ERROR("Invalid Interpolation specification.")
-  ELSE
-    !If there are not enough arguments default the problem specification 
-    NUMBER_GLOBAL_X_ELEMENTS=1
-    NUMBER_GLOBAL_Y_ELEMENTS=3
-    NUMBER_GLOBAL_Z_ELEMENTS=1
-!    INTERPOLATION_TYPE=1
-    
-    INTERPOLATION_TYPE=CMFE_BASIS_LINEAR_LAGRANGE_INTERPOLATION
-!    INTERPOLATION_TYPE=CMFE_BASIS_QUADRATIC_LAGRANGE_INTERPOLATION
-!    INTERPOLATION_TYPE=CMFE_BASIS_CUBIC_LAGRANGE_INTERPOLATION    
-    
-  ENDIF
-
   !Intialise OpenCMISS
   CALL cmfe_Initialise(WorldCoordinateSystem,WorldRegion,Err)
 
+  !CALL cmfe_ErrorHandlingModeSet(CMFE_ERRORS_OUTPUT_ERROR,Err)
   CALL cmfe_ErrorHandlingModeSet(CMFE_ERRORS_TRAP_ERROR,Err)
 
   CALL cmfe_RandomSeedsSet(9999,Err)
   
-  CALL cmfe_DiagnosticsSetOn(CMFE_IN_DIAG_TYPE,[1,2,3,4,5],"Diagnostics",["DOMAIN_MAPPINGS_LOCAL_FROM_GLOBAL_CALCULATE"],Err)
+  !CALL cmfe_DiagnosticsSetOn(CMFE_IN_DIAG_TYPE,[1,2],"",&
+  !  & ["DOMAIN_MAPPINGS_NODES_CALCULATE"],Err)
 
-  WRITE(Filename,'(A,"_",I0,"x",I0,"x",I0,"_",I0)') "Laplace",NUMBER_GLOBAL_X_ELEMENTS,NUMBER_GLOBAL_Y_ELEMENTS, &
-    & NUMBER_GLOBAL_Z_ELEMENTS,INTERPOLATION_TYPE
+  !CALL cmfe_DiagnosticsSetOn(CMFE_FROM_DIAG_TYPE,[3],"",&
+  !  & ["DECOMPOSITION_CREATE_FINISH"],Err)
+
+  !CALL cmfe_DiagnosticsSetOn(CMFE_IN_DIAG_TYPE,[1,2],"",&
+  !  & ["DECOMPOSITION_ADJACENT_DOMAINS_CALCULATE"],Err)
+
+  CALL cmfe_DiagnosticsSetOn(CMFE_IN_DIAG_TYPE,[2],"",&
+    & ["FIELD_MAPPINGS_CALCULATE"],Err)
+
   
-  CALL cmfe_OutputSetOn(Filename,Err)
+  
+  !CALL cmfe_OutputSetOn("diagnostics.txt",Err)
 
   !Get the computational nodes information
   CALL cmfe_ComputationalNumberOfNodesGet(NumberOfComputationalNodes,Err)
@@ -149,13 +122,7 @@ PROGRAM LAPLACE_EQUATION
   !Start the creation of a new RC coordinate system
   CALL cmfe_CoordinateSystem_Initialise(CoordinateSystem,Err)
   CALL cmfe_CoordinateSystem_CreateStart(CoordinateSystemUserNumber,CoordinateSystem,Err)
-  IF(NUMBER_GLOBAL_Z_ELEMENTS==0) THEN
-    !Set the coordinate system to be 2D
-    CALL cmfe_CoordinateSystem_DimensionSet(CoordinateSystem,2,Err)
-  ELSE
-    !Set the coordinate system to be 3D
-    CALL cmfe_CoordinateSystem_DimensionSet(CoordinateSystem,3,Err)
-  ENDIF
+  CALL cmfe_CoordinateSystem_DimensionSet(CoordinateSystem,2,Err)
   !Finish the creation of the coordinate system
   CALL cmfe_CoordinateSystem_CreateFinish(CoordinateSystem,Err)
 
@@ -176,80 +143,191 @@ PROGRAM LAPLACE_EQUATION
   !BASIS
   !-----------------------------------------------------------------------------------------------------------
 
-  !Start the creation of a basis (default is trilinear lagrange)
-  CALL cmfe_Basis_Initialise(Basis,Err)
-  CALL cmfe_Basis_CreateStart(BasisUserNumber,Basis,Err)
-  SELECT CASE(INTERPOLATION_TYPE)
-  CASE(1,2,3,4)
-    CALL cmfe_Basis_TypeSet(Basis,CMFE_BASIS_LAGRANGE_HERMITE_TP_TYPE,Err)
-  CASE(7,8,9)
-    CALL cmfe_Basis_TypeSet(Basis,CMFE_BASIS_SIMPLEX_TYPE,Err)
-  CASE DEFAULT
-    CALL HANDLE_ERROR("Invalid interpolation type.")
-  END SELECT
-  SELECT CASE(INTERPOLATION_TYPE)
-  CASE(1)
-    NUMBER_OF_GAUSS_XI=2
-  CASE(2)
-    NUMBER_OF_GAUSS_XI=3
-  CASE(3,4)
-    NUMBER_OF_GAUSS_XI=4
-  CASE DEFAULT
-    NUMBER_OF_GAUSS_XI=0 !Don't set number of Gauss points for tri/tet
-  END SELECT
-  IF(NUMBER_GLOBAL_Z_ELEMENTS==0) THEN
-    !Set the basis to be a bi-interpolation basis
-    CALL cmfe_Basis_NumberOfXiSet(Basis,2,Err)
-    CALL cmfe_Basis_InterpolationXiSet(Basis,[INTERPOLATION_TYPE,INTERPOLATION_TYPE],Err)
-    IF(NUMBER_OF_GAUSS_XI>0) THEN
-      CALL cmfe_Basis_QuadratureNumberOfGaussXiSet(Basis,[NUMBER_OF_GAUSS_XI,NUMBER_OF_GAUSS_XI],Err)
-    ENDIF
-  ELSE
-    !Set the basis to be a tri-interpolation basis
-    CALL cmfe_Basis_NumberOfXiSet(Basis,3,Err)
-    CALL cmfe_Basis_InterpolationXiSet(Basis,[INTERPOLATION_TYPE,INTERPOLATION_TYPE,INTERPOLATION_TYPE],Err)
-    IF(NUMBER_OF_GAUSS_XI>0) THEN
-      CALL cmfe_Basis_QuadratureNumberOfGaussXiSet(Basis,[NUMBER_OF_GAUSS_XI,NUMBER_OF_GAUSS_XI,NUMBER_OF_GAUSS_XI],Err)
-    ENDIF
-  ENDIF
-  !Finish the creation of the basis
-  CALL cmfe_Basis_CreateFinish(Basis,Err)
+  !Create linear basis
+  CALL cmfe_Basis_Initialise(LinearBasis,Err)
+  CALL cmfe_Basis_CreateStart(LinearBasisUserNumber,LinearBasis,Err)
+  CALL cmfe_Basis_TypeSet(LinearBasis,CMFE_BASIS_LAGRANGE_HERMITE_TP_TYPE,Err)
+  CALL cmfe_Basis_NumberOfXiSet(LinearBasis,2,Err)
+  CALL cmfe_Basis_InterpolationXiSet(LinearBasis,&
+    & [CMFE_BASIS_LINEAR_LAGRANGE_INTERPOLATION,CMFE_BASIS_LINEAR_LAGRANGE_INTERPOLATION],Err)
+  CALL cmfe_Basis_QuadratureNumberOfGaussXiSet(LinearBasis,[2,2],Err)
+  CALL cmfe_Basis_CreateFinish(LinearBasis,Err)
+  
+  !Create hermite basis
+  CALL cmfe_Basis_Initialise(HermiteBasis,Err)
+  CALL cmfe_Basis_CreateStart(HermiteBasisUserNumber,HermiteBasis,Err)
+  CALL cmfe_Basis_TypeSet(HermiteBasis,CMFE_BASIS_LAGRANGE_HERMITE_TP_TYPE,Err)
+  CALL cmfe_Basis_NumberOfXiSet(HermiteBasis,2,Err)
+  CALL cmfe_Basis_InterpolationXiSet(HermiteBasis,&
+    & [CMFE_BASIS_CUBIC_HERMITE_INTERPOLATION,CMFE_BASIS_CUBIC_HERMITE_INTERPOLATION],Err)
+  CALL cmfe_Basis_QuadratureNumberOfGaussXiSet(HermiteBasis,[3,3],Err)
+  CALL cmfe_Basis_CreateFinish(HermiteBasis,Err)
    
   !-----------------------------------------------------------------------------------------------------------
   !MESH
   !-----------------------------------------------------------------------------------------------------------
 
-  !Start the creation of a generated mesh in the region
-  CALL cmfe_GeneratedMesh_Initialise(GeneratedMesh,Err)
-  CALL cmfe_GeneratedMesh_CreateStart(GeneratedMeshUserNumber,Region,GeneratedMesh,Err)
-  !Set up a regular x*y*z mesh
-  CALL cmfe_GeneratedMesh_TypeSet(GeneratedMesh,CMFE_GENERATED_MESH_REGULAR_MESH_TYPE,Err)
-  !Set the default basis
-  CALL cmfe_GeneratedMesh_BasisSet(GeneratedMesh,Basis,Err)   
-  !Define the mesh on the region
-  IF(NUMBER_GLOBAL_Z_ELEMENTS==0) THEN
-    CALL cmfe_GeneratedMesh_ExtentSet(GeneratedMesh,[WIDTH,HEIGHT],Err)
-    CALL cmfe_GeneratedMesh_NumberOfElementsSet(GeneratedMesh,[NUMBER_GLOBAL_X_ELEMENTS,NUMBER_GLOBAL_Y_ELEMENTS],Err)
-  ELSE
-    CALL cmfe_GeneratedMesh_ExtentSet(GeneratedMesh,[WIDTH,HEIGHT,LENGTH],Err)
-    CALL cmfe_GeneratedMesh_NumberOfElementsSet(GeneratedMesh,[NUMBER_GLOBAL_X_ELEMENTS,NUMBER_GLOBAL_Y_ELEMENTS, &
-      & NUMBER_GLOBAL_Z_ELEMENTS],Err)
-  ENDIF    
-  !Finish the creation of a generated mesh in the region
-  CALL cmfe_Mesh_Initialise(Mesh,Err)
-  CALL cmfe_GeneratedMesh_CreateFinish(GeneratedMesh,MeshUserNumber,Mesh,Err)
+ ! !Start the creation of a generated mesh in the region
+ ! CALL cmfe_GeneratedMesh_Initialise(GeneratedMesh,Err)
+ ! CALL cmfe_GeneratedMesh_CreateStart(GeneratedMeshUserNumber,Region,GeneratedMesh,Err)
+ ! !Set up a regular x*y*z mesh
+ ! CALL cmfe_GeneratedMesh_TypeSet(GeneratedMesh,CMFE_GENERATED_MESH_REGULAR_MESH_TYPE,Err)
+ ! !Set the default basis
+ ! CALL cmfe_GeneratedMesh_BasisSet(GeneratedMesh,Basis,Err)   
+ ! !Define the mesh on the region
+ ! IF(NUMBER_GLOBAL_Z_ELEMENTS==0) THEN
+ !   CALL cmfe_GeneratedMesh_ExtentSet(GeneratedMesh,[WIDTH,HEIGHT],Err)
+ !   CALL cmfe_GeneratedMesh_NumberOfElementsSet(GeneratedMesh,[NUMBER_GLOBAL_X_ELEMENTS,NUMBER_GLOBAL_Y_ELEMENTS],Err)
+ ! ELSE
+ !   CALL cmfe_GeneratedMesh_ExtentSet(GeneratedMesh,[WIDTH,HEIGHT,LENGTH],Err)
+ !   CALL cmfe_GeneratedMesh_NumberOfElementsSet(GeneratedMesh,[NUMBER_GLOBAL_X_ELEMENTS,NUMBER_GLOBAL_Y_ELEMENTS, &
+ !     & NUMBER_GLOBAL_Z_ELEMENTS],Err)
+ ! ENDIF    
+ ! !Finish the creation of a generated mesh in the region
+ ! CALL cmfe_Mesh_Initialise(Mesh,Err)
+ ! CALL cmfe_GeneratedMesh_CreateFinish(GeneratedMesh,MeshUserNumber,Mesh,Err)
 
+  ! Create mesh as specified in "PartitionedMesh_4x4.pdf"
+  
+  CALL cmfe_Mesh_Initialise(Mesh,Err)
+  CALL cmfe_Mesh_CreateStart(MeshUserNumber,Region,2,Mesh,Err)
+  CALL cmfe_Mesh_NumberOfComponentsSet(Mesh,1,Err)
+  NumberOfElements = 16
+  IF (NumberOfComputationalNodes == 3) NumberOfElements = 3
+  CALL cmfe_Mesh_NumberOfElementsSet(Mesh,NumberOfElements,Err)
+  
+  ! Create elements 
+  CALL cmfe_MeshElements_Initialise(MeshElements,Err)
+  CALL cmfe_MeshElements_CreateStart(Mesh,1,LinearBasis,MeshElements,Err)
+  
+  ! Define nodes for the mesh
+  CALL cmfe_Nodes_Initialise(Nodes,Err)
+  NumberOfNodes = 25
+  IF (NumberOfComputationalNodes == 3) NumberOfElements = 4
+  CALL cmfe_Nodes_CreateStart(Region,NumberOfNodes,Nodes,Err)
+  CALL cmfe_Nodes_CreateFinish(Nodes,Err)
+  
+  ! Set adjacent nodes for each element
+  IF (NumberOfComputationalNodes == 3) THEN
+    CALL cmfe_MeshElements_NodesSet(MeshElements, 1, [1,2,5,6], Err)
+    CALL cmfe_MeshElements_NodesSet(MeshElements, 2, [2,3,6,7], Err)
+    CALL cmfe_MeshElements_NodesSet(MeshElements, 3, [3,4,7,8], Err)
+    CALL cmfe_MeshElements_BasisSet(MeshElements,1,LinearBasis,Err)
+    CALL cmfe_MeshElements_BasisSet(MeshElements,2,HermiteBasis,Err)
+    CALL cmfe_MeshElements_BasisSet(MeshElements,3,LinearBasis,Err)
+  ELSE
+    DO RowNo = 1,4
+      DO ColumnNo = 1,4
+        GlobalElementNo = (RowNo-1)*4 + ColumnNo
+        GlobalNodeNo = (RowNo-1)*5 + ColumnNo
+        CALL cmfe_MeshElements_NodesSet(MeshElements, GlobalElementNo, &
+          & [GlobalNodeNo,GlobalNodeNo+1,GlobalNodeNo+5,GlobalNodeNo+6], Err)
+      ENDDO
+    ENDDO
+
+    ! Set the basis
+    DO GlobalElementNo=1,4
+      CALL cmfe_MeshElements_BasisSet(MeshElements,GlobalElementNo,HermiteBasis,Err)
+    ENDDO
+    DO GlobalElementNo=5,12
+      CALL cmfe_MeshElements_BasisSet(MeshElements,GlobalElementNo,LinearBasis,Err)
+    ENDDO
+    DO GlobalElementNo=13,16
+      CALL cmfe_MeshElements_BasisSet(MeshElements,GlobalElementNo,HermiteBasis,Err)
+    ENDDO
+  ENDIF
+  
+  CALL cmfe_MeshElements_CreateFinish(MeshElements,Err)
+  
+  CALL cmfe_Mesh_CreateFinish(Mesh,Err)
+  
   !Create a decomposition
   CALL cmfe_Decomposition_Initialise(Decomposition,Err)
   CALL cmfe_Decomposition_CreateStart(DecompositionUserNumber,Mesh,Decomposition,Err)
 ! Set the decomposition to be a general decomposition with the specified number of domains
-  CALL cmfe_Decomposition_TypeSet(Decomposition,CMFE_DECOMPOSITION_CALCULATED_TYPE,Err)
+  
+  !CALL cmfe_Decomposition_TypeSet(Decomposition,CMFE_DECOMPOSITION_CALCULATED_TYPE,Err)
+  CALL cmfe_Decomposition_TypeSet(Decomposition,CMFE_DECOMPOSITION_USER_DEFINED_TYPE,Err)
+  
   CALL cmfe_Decomposition_NumberOfDomainsSet(Decomposition,NumberOfComputationalNodes,Err)
+  
+  ! global element numbers
+  !13 14 15 16
+  ! 9 10 11 12
+  ! 5  6  7  8
+  ! 1  2  3  4
+  
+  SetDecompositionDistributed = .FALSE.   ! true only works with new implementation, false works with both
+  IF (NumberOfComputationalNodes == 1) THEN
+    DO I=1,16
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,I,0,Err)
+    ENDDO
+  ELSEIF (NumberOfComputationalNodes == 2) THEN
+    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,1,0,Err)
+    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,2,0,Err)
+    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,5,0,Err)
+    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,6,0,Err)
+    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,9,0,Err)
+    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,10,0,Err)
+    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,13,0,Err)
+    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,14,0,Err)
+    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,3,1,Err)
+    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,4,1,Err)
+    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,7,1,Err)
+    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,8,1,Err)
+    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,11,1,Err)
+    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,12,1,Err)
+    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,15,1,Err)
+    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,16,1,Err)
+  ELSEIF (NumberOfComputationalNodes == 3) THEN
+    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,1,0,Err)
+    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,2,1,Err)
+    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,3,2,Err)
+  ELSEIF (NumberOfComputationalNodes >= 4) THEN
+    IF (ComputationalNodeNumber == 0 .OR..NOT.SetDecompositionDistributed) THEN
+      !                                             global el., domain
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,9,2,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,5,0,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,14,2,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,11,3,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,6,0,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,16,3,Err)
+    ENDIF
+    
+    IF (ComputationalNodeNumber == 1 .OR..NOT.SetDecompositionDistributed) THEN
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,7,0,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,15,3,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,1,0,Err)
+    ENDIF
+    
+    IF (ComputationalNodeNumber == 2 .OR..NOT.SetDecompositionDistributed) THEN
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,10,2,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,8,1,Err)
+    ENDIF
+    
+    IF (ComputationalNodeNumber == 3 .OR..NOT.SetDecompositionDistributed) THEN
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,2,0,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,3,1,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,12,3,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,4,1,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,13,2,Err)
+      
+    ENDIF
+  ENDIF
+  
   !Finish the decomposition
   CALL cmfe_Decomposition_CreateFinish(Decomposition,Err)
  
   !Destory the mesh now that we have decomposed it
 ! CALL cmfe_Mesh_Destroy(Mesh,Err)
+
+  !Variable, MaxDepth, MaxArrayLength
+  !CALL cmfe_PrintDecomposition(Decomposition,3,100,Err)
+  
+  
+  
+  !PRINT *, "Abort program in laplace_equation.f90:329"
+  !STOP
  
   !-----------------------------------------------------------------------------------------------------------
   !GEOMETRIC FIELD
@@ -261,16 +339,30 @@ PROGRAM LAPLACE_EQUATION
   !Set the decomposition to use
   CALL cmfe_Field_MeshDecompositionSet(GeometricField,Decomposition,Err)
   !Set the domain to be used by the field components.
+  !CALL cmfe_Field_NumberOfComponentsSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,7,Err)
+  CALL cmfe_Field_NumberOfComponentsSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,4,Err)
+  
   CALL cmfe_Field_ComponentMeshComponentSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,1,1,Err)
   CALL cmfe_Field_ComponentMeshComponentSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,2,1,Err)
-  IF(NUMBER_GLOBAL_Z_ELEMENTS/=0) THEN
-    CALL cmfe_Field_ComponentMeshComponentSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,3,1,Err)
-  ENDIF
+  CALL cmfe_Field_ComponentInterpolationSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,3,CMFE_FIELD_ELEMENT_BASED_INTERPOLATION,Err)
+  CALL cmfe_Field_ComponentInterpolationSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,4,CMFE_FIELD_CONSTANT_INTERPOLATION,Err)
+  !CALL cmfe_Field_ComponentInterpolationSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,5,CMFE_FIELD_NODE_BASED_INTERPOLATION,Err)
+  !CALL cmfe_Field_ComponentInterpolationSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,6,CMFE_FIELD_CONSTANT_INTERPOLATION,Err)
+  !CALL cmfe_Field_ComponentInterpolationSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,7,CMFE_FIELD_ELEMENT_BASED_INTERPOLATION,Err)
+  
   !Finish creating the field
   CALL cmfe_Field_CreateFinish(GeometricField,Err)
 
+  PRINT *, ""
+  !PRINT *, "Print field GeometricField"
+  !CALL cmfe_PrintField(GeometricField,3,5,Err)
+  
+  PRINT *, "Abort program in laplace_equation.f90:360"
+  STOP
+ 
+  
   !Update the geometric field parameters
-  CALL cmfe_GeneratedMesh_GeometricParametersCalculate(GeneratedMesh,GeometricField,Err)
+  !CALL cmfe_GeneratedMesh_GeometricParametersCalculate(GeneratedMesh,GeometricField,Err)
   
   !-----------------------------------------------------------------------------------------------------------
   !EQUATIONS SETS
