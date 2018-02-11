@@ -143,7 +143,7 @@ PROGRAM LAPLACE_EQUATION
   CALL cmfe_ComputationalNodeNumberGet(ComputationalNodeNumber,Err)
 
   !-----------------------------------------------------------------------------------------------------------
-  !COORDINATE SYSTEM
+  ! COORDINATE SYSTEM
   !-----------------------------------------------------------------------------------------------------------  
  
   !Start the creation of a new RC coordinate system
@@ -160,7 +160,7 @@ PROGRAM LAPLACE_EQUATION
   CALL cmfe_CoordinateSystem_CreateFinish(CoordinateSystem,Err)
 
   !-----------------------------------------------------------------------------------------------------------
-  !REGION
+  ! REGION
   !-----------------------------------------------------------------------------------------------------------
 
   !Start the creation of the region
@@ -173,7 +173,7 @@ PROGRAM LAPLACE_EQUATION
   CALL cmfe_Region_CreateFinish(Region,Err)
 
   !-----------------------------------------------------------------------------------------------------------
-  !BASIS
+  ! BASIS
   !-----------------------------------------------------------------------------------------------------------
 
   !Start the creation of a basis (default is trilinear lagrange)
@@ -216,7 +216,7 @@ PROGRAM LAPLACE_EQUATION
   CALL cmfe_Basis_CreateFinish(Basis,Err)
    
   !-----------------------------------------------------------------------------------------------------------
-  !MESH
+  ! MESH
   !-----------------------------------------------------------------------------------------------------------
 
   !Start the creation of a generated mesh in the region
@@ -252,7 +252,7 @@ PROGRAM LAPLACE_EQUATION
 ! CALL cmfe_Mesh_Destroy(Mesh,Err)
  
   !-----------------------------------------------------------------------------------------------------------
-  !GEOMETRIC FIELD
+  ! GEOMETRIC FIELD
   !-----------------------------------------------------------------------------------------------------------
 
   !Start to create a default (geometric) field on the region
@@ -273,7 +273,7 @@ PROGRAM LAPLACE_EQUATION
   CALL cmfe_GeneratedMesh_GeometricParametersCalculate(GeneratedMesh,GeometricField,Err)
   
   !-----------------------------------------------------------------------------------------------------------
-  !EQUATIONS SETS
+  ! EQUATIONS SETS
   !-----------------------------------------------------------------------------------------------------------
 
   !Create the Standard Laplace Equations set
@@ -321,7 +321,7 @@ PROGRAM LAPLACE_EQUATION
   CALL cmfe_EquationsSet_EquationsCreateFinish(EquationsSet,Err)
 
   !-----------------------------------------------------------------------------------------------------------
-  !PROBLEM
+  ! PROBLEM
   !-----------------------------------------------------------------------------------------------------------  
 
   !Start the creation of a problem.
@@ -337,7 +337,7 @@ PROGRAM LAPLACE_EQUATION
   CALL cmfe_Problem_ControlLoopCreateFinish(Problem,Err)
  
   !-----------------------------------------------------------------------------------------------------------
-  !SOLVER
+  ! SOLVER
   !-----------------------------------------------------------------------------------------------------------
 
   !Start the creation of the problem solvers
@@ -365,7 +365,7 @@ PROGRAM LAPLACE_EQUATION
   CALL cmfe_Problem_SolversCreateFinish(Problem,Err)
 
   !-----------------------------------------------------------------------------------------------------------
-  !SOLVER EQUATIONS
+  ! SOLVER EQUATIONS
   !-----------------------------------------------------------------------------------------------------------  
 
   !Start the creation of the problem solver equations
@@ -384,7 +384,7 @@ PROGRAM LAPLACE_EQUATION
   CALL cmfe_Problem_SolverEquationsCreateFinish(Problem,Err)
 
   !-----------------------------------------------------------------------------------------------------------
-  !BOUNDARY CONDITIONS
+  ! BOUNDARY CONDITIONS
   !-----------------------------------------------------------------------------------------------------------
 
   !Start the creation of the equations set boundary conditions
@@ -409,14 +409,14 @@ PROGRAM LAPLACE_EQUATION
   CALL cmfe_SolverEquations_BoundaryConditionsCreateFinish(SolverEquations,Err)
 
   !-----------------------------------------------------------------------------------------------------------
-  !SOLVE
+  ! SOLVE
   !-----------------------------------------------------------------------------------------------------------
 
   !Solve the problem
   CALL cmfe_Problem_Solve(Problem,Err)
 
   !-----------------------------------------------------------------------------------------------------------
-  !OUTPUT
+  ! OUTPUT
   !-----------------------------------------------------------------------------------------------------------
 
   !Export results
