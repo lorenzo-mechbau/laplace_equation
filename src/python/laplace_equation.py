@@ -1,16 +1,7 @@
-#!/usr/bin/env python
-
-# Add Python bindings directory to PATH
-#import sys, os
-#sys.path.append(os.sep.join((os.environ['OPENCMISS_ROOT'],'cm','bindings','python')))
-#sys.path.append("/home/pmit021/OPENCMISS14072017/install/x86_64_linux/gnu-C5.4-gnu-F5.4/mpich_release/lib/python2.7/Release/opencmiss.iron")
-
-
 # Intialise OpenCMISS-Iron
 from opencmiss.iron import iron
 
 #parameters.parse()
-
 
 #-----------------------------------------------------------------------------------------------------------
 # SET PROBLEM PARAMETERS
@@ -48,7 +39,7 @@ computationalNodeNumber = iron.ComputationalNodeNumberGet()
 
 #-----------------------------------------------------------------------------------------------------------
 #COORDINATE SYSTEM
-#-----------------------------------------------------------------------------------------------------------  
+#-----------------------------------------------------------------------------------------------------------
 
 coordinateSystem = iron.CoordinateSystem()
 coordinateSystem.CreateStart(coordinateSystemUserNumber)
@@ -63,7 +54,7 @@ region.CreateStart(regionUserNumber,iron.WorldRegion)
 region.label = "laplace_equation"
 region.coordinateSystem = coordinateSystem
 region.CreateFinish()
- 
+
 #-----------------------------------------------------------------------------------------------------------
 #BASIS
 #-----------------------------------------------------------------------------------------------------------
@@ -115,7 +106,7 @@ geometricField.CreateFinish()
 generatedMesh.GeometricParametersCalculate(geometricField)
 
 #-----------------------------------------------------------------------------------------------------------
-#EQUATION SETS 
+#EQUATION SETS
 #-----------------------------------------------------------------------------------------------------------
 
 # Create standard Laplace equations set
@@ -153,7 +144,7 @@ equationsSet.EquationsCreateFinish()
 
 #-----------------------------------------------------------------------------------------------------------
 #PROBLEM
-#-----------------------------------------------------------------------------------------------------------  
+#-----------------------------------------------------------------------------------------------------------
 
 problem = iron.Problem()
 problemSpecification = [iron.ProblemClasses.CLASSICAL_FIELD,
@@ -182,7 +173,7 @@ problem.SolversCreateFinish()
 
 #-----------------------------------------------------------------------------------------------------------
 #SOLVER EQUATIONS
-#-----------------------------------------------------------------------------------------------------------  
+#-----------------------------------------------------------------------------------------------------------
 
 # Create solver equations and add equations set to solver equations
 solver = iron.Solver()
@@ -243,23 +234,3 @@ fields.Finalise()
 
 # Finalise OpenCMISS-Iron
 iron.Finalise()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

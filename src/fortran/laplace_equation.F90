@@ -6,13 +6,7 @@ PROGRAM LAPLACE_EQUATION
 #ifndef NOMPIMOD
   USE MPI
 #endif
-
-#ifdef WIN32
-  USE IFQWIN
-#endif
-
   IMPLICIT NONE
-
 #ifdef NOMPIMOD
 #include "mpif.h"
 #endif
@@ -20,7 +14,7 @@ PROGRAM LAPLACE_EQUATION
   !-----------------------------------------------------------------------------------------------------------
   ! PROGRAM VARIABLES AND TYPES
   !-----------------------------------------------------------------------------------------------------------
-  
+
   !Test program parameters
   REAL(CMISSRP), PARAMETER :: HEIGHT=1.0_CMISSRP
   REAL(CMISSRP), PARAMETER :: WIDTH=1.0_CMISSRP
@@ -37,9 +31,9 @@ PROGRAM LAPLACE_EQUATION
   INTEGER(CMISSIntg), PARAMETER :: DependentFieldUserNumber=9
   INTEGER(CMISSIntg), PARAMETER :: EquationsSetUserNumber=10
   INTEGER(CMISSIntg), PARAMETER :: ProblemUserNumber=11
- 
+
   !Program types
-  
+
   !Program variables
   INTEGER(CMISSIntg) :: NUMBER_OF_ARGUMENTS,ARGUMENT_LENGTH,STATUS
   INTEGER(CMISSIntg) :: NUMBER_GLOBAL_X_ELEMENTS,NUMBER_GLOBAL_Y_ELEMENTS,NUMBER_GLOBAL_Z_ELEMENTS, &
@@ -55,7 +49,7 @@ PROGRAM LAPLACE_EQUATION
   TYPE(cmfe_EquationsSetType) :: EquationsSet
   TYPE(cmfe_FieldType) :: GeometricField,EquationsSetField,DependentField
   TYPE(cmfe_FieldsType) :: Fields
-  TYPE(cmfe_GeneratedMeshType) :: GeneratedMesh  
+  TYPE(cmfe_GeneratedMeshType) :: GeneratedMesh
   TYPE(cmfe_MeshType) :: Mesh
   TYPE(cmfe_NodesType) :: Nodes
   TYPE(cmfe_ProblemType) :: Problem
@@ -63,29 +57,12 @@ PROGRAM LAPLACE_EQUATION
   TYPE(cmfe_SolverType) :: Solver
   TYPE(cmfe_SolverEquationsType) :: SolverEquations
 
-#ifdef WIN32
-  !Quickwin type
-  LOGICAL :: QUICKWIN_STATUS=.FALSE.
-  TYPE(WINDOWCONFIG) :: QUICKWIN_WINDOW_CONFIG
-#endif
-  
-  !Generic CMISS variables  
+  !Generic CMISS variables
   INTEGER(CMISSIntg) :: NumberOfComputationalNodes,ComputationalNodeNumber
   INTEGER(CMISSIntg) :: EquationsSetIndex
   INTEGER(CMISSIntg) :: FirstNodeNumber,LastNodeNumber
   INTEGER(CMISSIntg) :: FirstNodeDomain,LastNodeDomain
   INTEGER(CMISSIntg) :: Err
-  
-#ifdef WIN32
-  !Initialise QuickWin
-  QUICKWIN_WINDOW_CONFIG%TITLE="General Output" !Window title
-  QUICKWIN_WINDOW_CONFIG%NUMTEXTROWS=-1 !Max possible number of rows
-  QUICKWIN_WINDOW_CONFIG%MODE=QWIN$SCROLLDOWN
-  !Set the window parameters
-  QUICKWIN_STATUS=SETWINDOWCONFIG(QUICKWIN_WINDOW_CONFIG)
-  !If attempt fails set with system estimated values
-  IF(.NOT.QUICKWIN_STATUS) QUICKWIN_STATUS=SETWINDOWCONFIG(QUICKWIN_WINDOW_CONFIG)
-#endif
 
   !-----------------------------------------------------------------------------------------------------------
   ! PROBLEM CONTROL PANEL
@@ -112,30 +89,26 @@ PROGRAM LAPLACE_EQUATION
     READ(COMMAND_ARGUMENT(1:ARGUMENT_LENGTH),*) INTERPOLATION_TYPE
     IF(INTERPOLATION_TYPE<=0) CALL HANDLE_ERROR("Invalid Interpolation specification.")
   ELSE
-    !If there are not enough arguments default the problem specification 
+    !If there are not enough arguments default the problem specification
     NUMBER_GLOBAL_X_ELEMENTS=1
     NUMBER_GLOBAL_Y_ELEMENTS=3
     NUMBER_GLOBAL_Z_ELEMENTS=1
 !    INTERPOLATION_TYPE=1
-    
+
     INTERPOLATION_TYPE=CMFE_BASIS_LINEAR_LAGRANGE_INTERPOLATION
 !    INTERPOLATION_TYPE=CMFE_BASIS_QUADRATIC_LAGRANGE_INTERPOLATION
-!    INTERPOLATION_TYPE=CMFE_BASIS_CUBIC_LAGRANGE_INTERPOLATION    
-    
+!    INTERPOLATION_TYPE=CMFE_BASIS_CUBIC_LAGRANGE_INTERPOLATION
   ENDIF
 
   !Intialise OpenCMISS
   CALL cmfe_Initialise(WorldCoordinateSystem,WorldRegion,Err)
-
   CALL cmfe_ErrorHandlingModeSet(CMFE_ERRORS_TRAP_ERROR,Err)
-
   CALL cmfe_RandomSeedsSet(9999,Err)
-  
-  CALL cmfe_DiagnosticsSetOn(CMFE_IN_DIAG_TYPE,[1,2,3,4,5],"Diagnostics",["DOMAIN_MAPPINGS_LOCAL_FROM_GLOBAL_CALCULATE"],Err)
+  !CALL cmfe_DiagnosticsSetOn(CMFE_IN_DIAG_TYPE,[1,2,3,4,5],"Diagnostics",["DOMAIN_MAPPINGS_LOCAL_FROM_GLOBAL_CALCULATE"],Err)
 
   WRITE(Filename,'(A,"_",I0,"x",I0,"x",I0,"_",I0)') "Laplace",NUMBER_GLOBAL_X_ELEMENTS,NUMBER_GLOBAL_Y_ELEMENTS, &
     & NUMBER_GLOBAL_Z_ELEMENTS,INTERPOLATION_TYPE
-  
+
   CALL cmfe_OutputSetOn(Filename,Err)
 
   !Get the computational nodes information
@@ -144,8 +117,8 @@ PROGRAM LAPLACE_EQUATION
 
   !-----------------------------------------------------------------------------------------------------------
   !COORDINATE SYSTEM
-  !-----------------------------------------------------------------------------------------------------------  
- 
+  !-----------------------------------------------------------------------------------------------------------
+
   !Start the creation of a new RC coordinate system
   CALL cmfe_CoordinateSystem_Initialise(CoordinateSystem,Err)
   CALL cmfe_CoordinateSystem_CreateStart(CoordinateSystemUserNumber,CoordinateSystem,Err)
@@ -214,7 +187,7 @@ PROGRAM LAPLACE_EQUATION
   ENDIF
   !Finish the creation of the basis
   CALL cmfe_Basis_CreateFinish(Basis,Err)
-   
+
   !-----------------------------------------------------------------------------------------------------------
   !MESH
   !-----------------------------------------------------------------------------------------------------------
@@ -225,7 +198,7 @@ PROGRAM LAPLACE_EQUATION
   !Set up a regular x*y*z mesh
   CALL cmfe_GeneratedMesh_TypeSet(GeneratedMesh,CMFE_GENERATED_MESH_REGULAR_MESH_TYPE,Err)
   !Set the default basis
-  CALL cmfe_GeneratedMesh_BasisSet(GeneratedMesh,Basis,Err)   
+  CALL cmfe_GeneratedMesh_BasisSet(GeneratedMesh,Basis,Err)
   !Define the mesh on the region
   IF(NUMBER_GLOBAL_Z_ELEMENTS==0) THEN
     CALL cmfe_GeneratedMesh_ExtentSet(GeneratedMesh,[WIDTH,HEIGHT],Err)
@@ -234,7 +207,7 @@ PROGRAM LAPLACE_EQUATION
     CALL cmfe_GeneratedMesh_ExtentSet(GeneratedMesh,[WIDTH,HEIGHT,LENGTH],Err)
     CALL cmfe_GeneratedMesh_NumberOfElementsSet(GeneratedMesh,[NUMBER_GLOBAL_X_ELEMENTS,NUMBER_GLOBAL_Y_ELEMENTS, &
       & NUMBER_GLOBAL_Z_ELEMENTS],Err)
-  ENDIF    
+  ENDIF
   !Finish the creation of a generated mesh in the region
   CALL cmfe_Mesh_Initialise(Mesh,Err)
   CALL cmfe_GeneratedMesh_CreateFinish(GeneratedMesh,MeshUserNumber,Mesh,Err)
@@ -247,10 +220,10 @@ PROGRAM LAPLACE_EQUATION
   CALL cmfe_Decomposition_NumberOfDomainsSet(Decomposition,NumberOfComputationalNodes,Err)
   !Finish the decomposition
   CALL cmfe_Decomposition_CreateFinish(Decomposition,Err)
- 
+
   !Destory the mesh now that we have decomposed it
 ! CALL cmfe_Mesh_Destroy(Mesh,Err)
- 
+
   !-----------------------------------------------------------------------------------------------------------
   !GEOMETRIC FIELD
   !-----------------------------------------------------------------------------------------------------------
@@ -271,7 +244,7 @@ PROGRAM LAPLACE_EQUATION
 
   !Update the geometric field parameters
   CALL cmfe_GeneratedMesh_GeometricParametersCalculate(GeneratedMesh,GeometricField,Err)
-  
+
   !-----------------------------------------------------------------------------------------------------------
   !EQUATIONS SETS
   !-----------------------------------------------------------------------------------------------------------
@@ -322,7 +295,7 @@ PROGRAM LAPLACE_EQUATION
 
   !-----------------------------------------------------------------------------------------------------------
   !PROBLEM
-  !-----------------------------------------------------------------------------------------------------------  
+  !-----------------------------------------------------------------------------------------------------------
 
   !Start the creation of a problem.
   CALL cmfe_Problem_Initialise(Problem,Err)
@@ -335,7 +308,7 @@ PROGRAM LAPLACE_EQUATION
   CALL cmfe_Problem_ControlLoopCreateStart(Problem,Err)
   !Finish creating the problem control loop
   CALL cmfe_Problem_ControlLoopCreateFinish(Problem,Err)
- 
+
   !-----------------------------------------------------------------------------------------------------------
   !SOLVER
   !-----------------------------------------------------------------------------------------------------------
@@ -349,13 +322,13 @@ PROGRAM LAPLACE_EQUATION
 ! CALL cmfe_Solver_OutputTypeSet(Solver,CMFE_SOLVER_TIMING_OUTPUT,Err)
 ! CALL cmfe_Solver_OutputTypeSet(Solver,CMFE_SOLVER_SOLVER_OUTPUT,Err)
 ! CALL cmfe_Solver_OutputTypeSet(Solver,CMFE_SOLVER_MATRIX_OUTPUT,Err)
-  
+
 ! CALL cmfe_Solver_LinearTypeSet(Solver,CMFE_SOLVER_LINEAR_ITERATIVE_SOLVE_TYPE,Err)
 ! CALL cmfe_Solver_LinearIterativeAbsoluteToleranceSet(Solver,1.0E-12_CMISSRP,Err)
 ! CALL cmfe_Solver_LinearIterativeRelativeToleranceSet(Solver,1.0E-12_CMISSRP,Err)
 
   CALL cmfe_Solver_LinearTypeSet(Solver,CMFE_SOLVER_LINEAR_DIRECT_SOLVE_TYPE,Err)
-  
+
 ! CALL cmfe_Solver_LinearTypeSet(Solver,CMFE_SOLVER_LINEAR_DIRECT_SOLVE_TYPE,Err)
 ! CALL cmfe_Solver_LibraryTypeSet(Solver,CMFE_SOLVER_MUMPS_LIBRARY,Err)
 ! CALL cmfe_Solver_LibraryTypeSet(Solver,CMFE_SOLVER_LAPACK_LIBRARY,Err)
@@ -366,7 +339,7 @@ PROGRAM LAPLACE_EQUATION
 
   !-----------------------------------------------------------------------------------------------------------
   !SOLVER EQUATIONS
-  !-----------------------------------------------------------------------------------------------------------  
+  !-----------------------------------------------------------------------------------------------------------
 
   !Start the creation of the problem solver equations
   CALL cmfe_Solver_Initialise(Solver,Err)
@@ -377,7 +350,7 @@ PROGRAM LAPLACE_EQUATION
   CALL cmfe_Solver_SolverEquationsGet(Solver,SolverEquations,Err)
   !Set the solver equations sparsity
   CALL cmfe_SolverEquations_SparsityTypeSet(SolverEquations,CMFE_SOLVER_SPARSE_MATRICES,Err)
-  !CALL cmfe_SolverEquations_SparsityTypeSet(SolverEquations,CMFE_SOLVER_FULL_MATRICES,Err)  
+  !CALL cmfe_SolverEquations_SparsityTypeSet(SolverEquations,CMFE_SOLVER_FULL_MATRICES,Err)
   !Add in the equations set
   CALL cmfe_SolverEquations_EquationsSetAdd(SolverEquations,EquationsSet,EquationsSetIndex,Err)
   !Finish the creation of the problem solver equations
@@ -425,23 +398,18 @@ PROGRAM LAPLACE_EQUATION
   CALL cmfe_Fields_NodesExport(Fields,"laplace_equation","FORTRAN",Err)
   CALL cmfe_Fields_ElementsExport(Fields,"laplace_equation","FORTRAN",Err)
   CALL cmfe_Fields_Finalise(Fields,Err)
-  
+
   !Finialise CMISS
   CALL cmfe_Finalise(Err)
-
   WRITE(*,'(A)') "Program successfully completed."
-  
   STOP
-  
+
 CONTAINS
 
   SUBROUTINE HANDLE_ERROR(ERROR_STRING)
-
     CHARACTER(LEN=*), INTENT(IN) :: ERROR_STRING
-
     WRITE(*,'(">>ERROR: ",A)') ERROR_STRING(1:LEN_TRIM(ERROR_STRING))
     STOP
-
   END SUBROUTINE HANDLE_ERROR
-    
+
 END PROGRAM LAPLACE_EQUATION
