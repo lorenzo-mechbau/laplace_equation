@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # Intialise OpenCMISS-Iron
 from opencmiss.iron import iron
 
