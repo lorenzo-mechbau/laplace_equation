@@ -259,6 +259,9 @@ PROGRAM LAPLACE_EQUATION
   ! 5  6  7  8
   ! 1  2  3  4
   
+  PRINT *, "Computational node number:"
+  PRINT *, ComputationalNodeNumber
+  
   SetDecompositionDistributed = .FALSE.   ! true only works with new implementation, false works with both
   IF (NumberOfComputationalNodes == 1) THEN
     DO I=1,16
@@ -344,6 +347,7 @@ PROGRAM LAPLACE_EQUATION
   !CALL cmfe_Field_NumberOfComponentsSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,7,Err)
   CALL cmfe_Field_NumberOfComponentsSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,4,Err)
   
+  ! Define each component 2x Mesh, 2x Interpolation (???)
   CALL cmfe_Field_ComponentMeshComponentSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,1,1,Err)
   CALL cmfe_Field_ComponentMeshComponentSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,2,1,Err)
   CALL cmfe_Field_ComponentInterpolationSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,3,CMFE_FIELD_ELEMENT_BASED_INTERPOLATION,Err)
