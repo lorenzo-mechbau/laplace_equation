@@ -203,7 +203,9 @@ PROGRAM LAPLACE_EQUATION
   ! Define nodes for the mesh
   CALL cmfe_Nodes_Initialise(Nodes,Err)
   NumberOfNodes = 25
-  IF (NumberOfComputationalNodes == 3) NumberOfElements = 4
+! This line does not make much sense:  
+!  IF (NumberOfComputationalNodes == 3) NumberOfElements = 4
+  IF (NumberOfComputationalNodes == 3) NumberOfNodes = 8
   CALL cmfe_Nodes_CreateStart(Region,NumberOfNodes,Nodes,Err)
   CALL cmfe_Nodes_CreateFinish(Nodes,Err)
   
