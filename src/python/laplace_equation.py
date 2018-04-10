@@ -10,8 +10,8 @@ from opencmiss.iron import iron
 #-----------------------------------------------------------------------------------------------------------
 
 height = 1.0
-width = 1.0
-length = 1.0
+width = 2.0
+length = 3.0
 
 (coordinateSystemUserNumber,
     regionUserNumber,
@@ -33,7 +33,7 @@ numberGlobalZElements = 1
 # DIAGNOSTICS AND COMPUTATIONAL NODE INFORMATION
 #-----------------------------------------------------------------------------------------------------------
 
-iron.DiagnosticsSetOn(iron.DiagnosticTypes.IN,[1,2,3,4,5],"Diagnostics",["DOMAIN_MAPPINGS_LOCAL_FROM_GLOBAL_CALCULATE"])
+iron.DiagnosticsSetOn(iron.DiagnosticTypes.IN,[1,2,3,4,5],"Diagnostics",["Laplace_FiniteElementCalculate"])
 
 # Get the computational nodes information
 computationEnvironment = iron.ComputationEnvironment()
@@ -54,7 +54,7 @@ coordinateSystem.CreateFinish()
 #-----------------------------------------------------------------------------------------------------------
 region = iron.Region()
 region.CreateStart(regionUserNumber,iron.WorldRegion)
-region.label = "laplace_equation"
+region.label = "LaplaceEquation"
 region.coordinateSystem = coordinateSystem
 region.CreateFinish()
 
@@ -219,20 +219,20 @@ problem.Solve()
 #-----------------------------------------------------------------------------------------------------------
 
 # Export results
-baseName = "laplace_equation"
+baseName = "LaplaceEquation"
 dataFormat = "PLAIN_TEXT"
 
 fml = iron.FieldMLIO()
 fml.OutputCreate(mesh, "", baseName, dataFormat)
 fml.OutputAddFieldNoType(baseName+".geometric", dataFormat, geometricField,iron.FieldVariableTypes.U, iron.FieldParameterSetTypes.VALUES)
 fml.OutputAddFieldNoType(baseName+".phi", dataFormat, dependentField,iron.FieldVariableTypes.U, iron.FieldParameterSetTypes.VALUES)
-fml.OutputWrite("laplace_equation.xml")
+fml.OutputWrite("LaplaceEquation.xml")
 fml.Finalise()
 
 fields = iron.Fields()
 fields.CreateRegion(region)
-fields.NodesExport("laplace_equation","FORTRAN")
-fields.ElementsExport("laplace_equation","FORTRAN")
+fields.NodesExport("LaplaceEquation","FORTRAN")
+fields.ElementsExport("LaplaceEquation","FORTRAN")
 fields.Finalise()
 
 # Finalise OpenCMISS-Iron

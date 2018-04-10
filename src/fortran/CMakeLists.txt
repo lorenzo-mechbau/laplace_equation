@@ -1,7 +1,7 @@
-add_executable(${ExampleName} ${ExampleName}.F90)
+add_executable(${ExampleName}_Fortran ${ExampleName}.F90)
 
-target_link_libraries(${ExampleName} PRIVATE opencmisslibs)
+target_link_libraries(${ExampleName}_Fortran PRIVATE opencmisslibs)
 
-install(TARGETS ${ExampleName} DESTINATION bin)
+install(TARGETS ${ExampleName}_Fortran DESTINATION bin)
 
 configure_file(visualise.cmgui visualise.cmgui)
