@@ -36,8 +36,9 @@ numberGlobalZElements = 1
 iron.DiagnosticsSetOn(iron.DiagnosticTypes.IN,[1,2,3,4,5],"Diagnostics",["DOMAIN_MAPPINGS_LOCAL_FROM_GLOBAL_CALCULATE"])
 
 # Get the computational nodes information
-numberOfComputationalNodes = iron.ComputationalNumberOfNodesGet()
-computationalNodeNumber = iron.ComputationalNodeNumberGet()
+computationEnvironment = iron.ComputationEnvironment()
+numberOfComputationalNodes = computationEnvironment.NumberOfWorldNodesGet()
+computationalNodeNumber = computationEnvironment.WorldNodeNumberGet()
 
 #-----------------------------------------------------------------------------------------------------------
 #COORDINATE SYSTEM
