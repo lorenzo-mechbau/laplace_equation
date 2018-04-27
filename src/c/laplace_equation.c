@@ -51,7 +51,8 @@ int main(int argc, char *argv[])
   cmfe_BasisType basis = (cmfe_BasisType)NULL;
   cmfe_BoundaryConditionsType boundaryConditions=(cmfe_BoundaryConditionsType)NULL;
   cmfe_ComputationEnvironmentType computationEnvironment=(cmfe_ComputationEnvironmentType)NULL;
-  cmfe_CoordinateSystemType coordinateSystem=(cmfe_CoordinateSystemType)NULL,worldCoordinateSystem=(cmfe_CoordinateSystemType)NULL;
+  cmfe_ContextType context=(cmfe_ContextType)NULL;
+  cmfe_CoordinateSystemType coordinateSystem=(cmfe_CoordinateSystemType)NULL;
   cmfe_DecompositionType decomposition=(cmfe_DecompositionType)NULL;
   cmfe_EquationsType equations=(cmfe_EquationsType)NULL;
   cmfe_EquationsSetType equationsSet=(cmfe_EquationsSetType)NULL;
@@ -103,26 +104,28 @@ int main(int argc, char *argv[])
       interpolationType = CMFE_BASIS_LINEAR_LAGRANGE_INTERPOLATION;
    }
 
-  err = cmfe_CoordinateSystem_Initialise(&worldCoordinateSystem);
-  CHECK_ERROR("Initialising world coordinate system");
-  err = cmfe_Region_Initialise(&worldRegion);
-  CHECK_ERROR("Initialising world region");
-  err = cmfe_Initialise(worldCoordinateSystem,worldRegion);
+  err = cmfe_Context_Initialise(&context);
+  CHECK_ERROR("Initialising context");
+  err = cmfe_Initialise(context);
   CHECK_ERROR("Initialising OpenCMISS-Iron");
   err = cmfe_ErrorHandlingModeSet(CMFE_ERRORS_TRAP_ERROR);
 
+  err = cmfe_Region_Initialise(&worldRegion);
+  err = cmfe_Context_WorldRegionGet(context,worldRegion);
+  
   sprintf(filename,"%s_%dx%dx%d_%d","Laplace",numberOfGlobalXElements,numberOfGlobalYElements,numberOfGlobalZElements,interpolationType);
 
   err = cmfe_OutputSetOn(STRING_SIZE,filename);
 
   /* Get the computational nodes information */
   err = cmfe_ComputationEnvironment_Initialise(&computationEnvironment);
+  err = cmfe_Context_ComputationEnvironmentGet(context,computationEnvironment);
   err = cmfe_ComputationEnvironment_NumberOfWorldNodesGet(computationEnvironment,&numberOfComputationalNodes);
   err = cmfe_ComputationEnvironment_WorldNodeNumberGet(computationEnvironment,&computationalNodeNumber);
 
   /* Start the creation of a new RC coordinate system */
   err = cmfe_CoordinateSystem_Initialise(&coordinateSystem);
-  err = cmfe_CoordinateSystem_CreateStart(COORDINATE_SYSTEM_USER_NUMBER,coordinateSystem);
+  err = cmfe_CoordinateSystem_CreateStart(COORDINATE_SYSTEM_USER_NUMBER,context,coordinateSystem);
   if(numberOfGlobalZElements == 0)
     {
       /* Set the coordinate system to be 2D */
@@ -150,7 +153,7 @@ int main(int argc, char *argv[])
 
   /* Start the creation of a basis (default is trilinear lagrange) */
   err = cmfe_Basis_Initialise(&basis);
-  err = cmfe_Basis_CreateStart(BASIS_USER_NUMBER,basis);
+  err = cmfe_Basis_CreateStart(BASIS_USER_NUMBER,context,basis);
   switch(interpolationType)
     {
     case 1:
@@ -284,7 +287,7 @@ int main(int argc, char *argv[])
   problemSpecification[0] = CMFE_PROBLEM_CLASSICAL_FIELD_CLASS;
   problemSpecification[1] = CMFE_PROBLEM_LAPLACE_EQUATION_TYPE;
   problemSpecification[2] = CMFE_PROBLEM_STANDARD_LAPLACE_SUBTYPE;
-  err = cmfe_Problem_CreateStart(PROBLEM_USER_NUMBER,3,problemSpecification,problem);
+  err = cmfe_Problem_CreateStart(PROBLEM_USER_NUMBER,context,3,problemSpecification,problem);
   /* Finish the creation of a problem. */
   err = cmfe_Problem_CreateFinish(problem);
 
@@ -364,7 +367,7 @@ int main(int argc, char *argv[])
   err = cmfe_Fields_Finalise(&fields);
 
   /* Finalise OpenCMISS */
-  err = cmfe_Finalise();
+  err = cmfe_Finalise(context);
 
   return err;
 }

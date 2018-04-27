@@ -33,10 +33,14 @@ numberGlobalZElements = 1
 # DIAGNOSTICS AND COMPUTATIONAL NODE INFORMATION
 #-----------------------------------------------------------------------------------------------------------
 
+worldRegion = iron.Region()
+iron.Context.WorldRegionGet(worldRegion)
+
 iron.DiagnosticsSetOn(iron.DiagnosticTypes.IN,[1,2,3,4,5],"Diagnostics",["Laplace_FiniteElementCalculate"])
 
 # Get the computational nodes information
 computationEnvironment = iron.ComputationEnvironment()
+iron.Context.ComputationEnvironmentGet(computationEnvironment)
 numberOfComputationalNodes = computationEnvironment.NumberOfWorldNodesGet()
 computationalNodeNumber = computationEnvironment.WorldNodeNumberGet()
 
@@ -45,7 +49,7 @@ computationalNodeNumber = computationEnvironment.WorldNodeNumberGet()
 #-----------------------------------------------------------------------------------------------------------
 
 coordinateSystem = iron.CoordinateSystem()
-coordinateSystem.CreateStart(coordinateSystemUserNumber)
+coordinateSystem.CreateStart(coordinateSystemUserNumber,iron.Context)
 coordinateSystem.dimension = 3
 coordinateSystem.CreateFinish()
 
@@ -53,7 +57,7 @@ coordinateSystem.CreateFinish()
 #REGION
 #-----------------------------------------------------------------------------------------------------------
 region = iron.Region()
-region.CreateStart(regionUserNumber,iron.WorldRegion)
+region.CreateStart(regionUserNumber,worldRegion)
 region.label = "LaplaceEquation"
 region.coordinateSystem = coordinateSystem
 region.CreateFinish()
@@ -63,7 +67,7 @@ region.CreateFinish()
 #-----------------------------------------------------------------------------------------------------------
 
 basis = iron.Basis()
-basis.CreateStart(basisUserNumber)
+basis.CreateStart(basisUserNumber,iron.Context)
 basis.type = iron.BasisTypes.LAGRANGE_HERMITE_TP
 basis.numberOfXi = 3
 basis.interpolationXi = [iron.BasisInterpolationSpecifications.LINEAR_LAGRANGE]*3
@@ -153,7 +157,7 @@ problem = iron.Problem()
 problemSpecification = [iron.ProblemClasses.CLASSICAL_FIELD,
         iron.ProblemTypes.LAPLACE_EQUATION,
         iron.ProblemSubtypes.STANDARD_LAPLACE]
-problem.CreateStart(problemUserNumber, problemSpecification)
+problem.CreateStart(problemUserNumber, iron.Context, problemSpecification)
 problem.CreateFinish()
 
 # Create control loops
@@ -236,4 +240,4 @@ fields.ElementsExport("LaplaceEquation","FORTRAN")
 fields.Finalise()
 
 # Finalise OpenCMISS-Iron
-iron.Finalise()
+iron.Finalise(iron.Context)
