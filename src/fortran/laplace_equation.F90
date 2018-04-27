@@ -215,14 +215,14 @@ PROGRAM LaplaceEquation
   !Create a decomposition
   CALL cmfe_Decomposition_Initialise(decomposition,err)
   CALL cmfe_Decomposition_CreateStart(DECOMPOSITION_USER_NUMBER,mesh,decomposition,err)
-! Set the decomposition to be a general decomposition with the specified number of domains
+  !Set the decomposition to be a general decomposition with the specified number of domains
   CALL cmfe_Decomposition_TypeSet(decomposition,CMFE_DECOMPOSITION_CALCULATED_TYPE,err)
   CALL cmfe_Decomposition_NumberOfDomainsSet(decomposition,numberOfComputationalNodes,err)
   !Finish the decomposition
   CALL cmfe_Decomposition_CreateFinish(decomposition,err)
 
   !Destory the mesh now that we have decomposed it
-! CALL cmfe_Mesh_Destroy(mesh,err)
+  !CALL cmfe_Mesh_Destroy(mesh,err)
 
   !-----------------------------------------------------------------------------------------------------------
   ! GEOMETRIC FIELD
@@ -284,12 +284,12 @@ PROGRAM LaplaceEquation
   CALL cmfe_EquationsSet_EquationsCreateStart(equationsSet,equations,err)
   !Set the equations matrices sparsity type
   CALL cmfe_Equations_SparsityTypeSet(equations,CMFE_EQUATIONS_SPARSE_MATRICES,err)
-! CALL cmfe_Equations_SparsityTypeSet(equations,CMFE_EQUATIONS_FULL_MATRICES,err)
+  !CALL cmfe_Equations_SparsityTypeSet(equations,CMFE_EQUATIONS_FULL_MATRICES,err)
   !Set the equations set output
-  CALL cmfe_Equations_OutputTypeSet(equations,CMFE_EQUATIONS_NO_OUTPUT,err)
-! CALL cmfe_Equations_OutputTypeSet(equations,CMFE_EQUATIONS_TIMING_OUTPUT,err)
-! CALL cmfe_Equations_OutputTypeSet(equations,CMFE_EQUATIONS_MATRIX_OUTPUT,err)
-! CALL cmfe_Equations_OutputTypeSet(equations,CMFE_EQUATIONS_ELEMENT_MATRIX_OUTPUT,err)
+  !CALL cmfe_Equations_OutputTypeSet(equations,CMFE_EQUATIONS_NO_OUTPUT,err)
+  !CALL cmfe_Equations_OutputTypeSet(equations,CMFE_EQUATIONS_TIMING_OUTPUT,err)
+  !CALL cmfe_Equations_OutputTypeSet(equations,CMFE_EQUATIONS_MATRIX_OUTPUT,err)
+  CALL cmfe_Equations_OutputTypeSet(equations,CMFE_EQUATIONS_ELEMENT_MATRIX_OUTPUT,err)
   !Finish the equations set equations
   CALL cmfe_EquationsSet_EquationsCreateFinish(equationsSet,err)
 
@@ -317,23 +317,22 @@ PROGRAM LaplaceEquation
   CALL cmfe_Solver_Initialise(solver,err)
   CALL cmfe_Problem_SolversCreateStart(problem,err)
   CALL cmfe_Problem_SolverGet(problem,CMFE_CONTROL_LOOP_NODE,1,solver,err)
-  CALL cmfe_Solver_OutputTypeSet(solver,CMFE_SOLVER_NO_OUTPUT,err)
-! CALL cmfe_Solver_OutputTypeSet(solver,CMFE_SOLVER_PROGRESS_OUTPUT,err)
-! CALL cmfe_Solver_OutputTypeSet(solver,CMFE_SOLVER_TIMING_OUTPUT,err)
-! CALL cmfe_Solver_OutputTypeSet(solver,CMFE_SOLVER_SOLVER_OUTPUT,err)
-! CALL cmfe_Solver_OutputTypeSet(solver,CMFE_SOLVER_MATRIX_OUTPUT,err)
-
-! CALL cmfe_Solver_LinearTypeSet(solver,CMFE_SOLVER_LINEAR_ITERATIVE_SOLVE_TYPE,err)
-! CALL cmfe_Solver_LinearIterativeAbsoluteToleranceSet(solver,1.0E-12_CMISSRP,err)
-! CALL cmfe_Solver_LinearIterativeRelativeToleranceSet(solver,1.0E-12_CMISSRP,err)
-
-  CALL cmfe_Solver_LinearTypeSet(solver,CMFE_SOLVER_LINEAR_DIRECT_SOLVE_TYPE,err)
-
-! CALL cmfe_Solver_LinearTypeSet(solver,CMFE_SOLVER_LINEAR_DIRECT_SOLVE_TYPE,err)
-! CALL cmfe_Solver_LibraryTypeSet(solver,CMFE_SOLVER_MUMPS_LIBRARY,err)
-! CALL cmfe_Solver_LibraryTypeSet(solver,CMFE_SOLVER_LAPACK_LIBRARY,err)
-! CALL cmfe_Solver_LibraryTypeSet(solver,CMFE_SOLVER_SUPERLU_LIBRARY,err)
-! CALL cmfe_Solver_LibraryTypeSet(solver,CMFE_SOLVER_PASTIX_LIBRARY,err)
+  !CALL cmfe_Solver_OutputTypeSet(solver,CMFE_SOLVER_NO_OUTPUT,err)
+  !CALL cmfe_Solver_OutputTypeSet(solver,CMFE_SOLVER_PROGRESS_OUTPUT,err)
+  !CALL cmfe_Solver_OutputTypeSet(solver,CMFE_SOLVER_TIMING_OUTPUT,err)
+  !CALL cmfe_Solver_OutputTypeSet(solver,CMFE_SOLVER_SOLVER_OUTPUT,err)
+  CALL cmfe_Solver_OutputTypeSet(solver,CMFE_SOLVER_MATRIX_OUTPUT,err)
+  
+  CALL cmfe_Solver_LinearTypeSet(solver,CMFE_SOLVER_LINEAR_ITERATIVE_SOLVE_TYPE,err)
+  CALL cmfe_Solver_LinearIterativeAbsoluteToleranceSet(solver,1.0E-12_CMISSRP,err)
+  CALL cmfe_Solver_LinearIterativeRelativeToleranceSet(solver,1.0E-12_CMISSRP,err)
+  
+  !CALL cmfe_Solver_LinearTypeSet(solver,CMFE_SOLVER_LINEAR_DIRECT_SOLVE_TYPE,err)
+  !CALL cmfe_Solver_LinearTypeSet(solver,CMFE_SOLVER_LINEAR_DIRECT_SOLVE_TYPE,err)
+  !CALL cmfe_Solver_LibraryTypeSet(solver,CMFE_SOLVER_MUMPS_LIBRARY,err)
+  !CALL cmfe_Solver_LibraryTypeSet(solver,CMFE_SOLVER_LAPACK_LIBRARY,err)
+  !CALL cmfe_Solver_LibraryTypeSet(solver,CMFE_SOLVER_SUPERLU_LIBRARY,err)
+  !CALL cmfe_Solver_LibraryTypeSet(solver,CMFE_SOLVER_PASTIX_LIBRARY,err)
   !Finish the creation of the problem solver
   CALL cmfe_Problem_SolversCreateFinish(problem,err)
 

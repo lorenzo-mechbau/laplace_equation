@@ -270,8 +270,8 @@ PROGRAM LaplaceEquation
   !Set the equations matrices sparsity type
   CALL cmfe_Equations_SparsityTypeSet(contextUserNumber,REGION_USER_NUMBER,EQUATIONS_SET_USER_NUMBER, &
     & CMFE_EQUATIONS_SPARSE_MATRICES,err)
-  CALL cmfe_Equations_SparsityTypeSet(contextUserNumber,REGION_USER_NUMBER,EQUATIONS_SET_USER_NUMBER, &
-    & CMFE_EQUATIONS_FULL_MATRICES,err)
+  !CALL cmfe_Equations_SparsityTypeSet(contextUserNumber,REGION_USER_NUMBER,EQUATIONS_SET_USER_NUMBER, &
+  !  & CMFE_EQUATIONS_FULL_MATRICES,err)
   !Set the equations set output
   CALL cmfe_Equations_OutputTypeSet(contextUserNumber,REGION_USER_NUMBER,EQUATIONS_SET_USER_NUMBER, &
     & CMFE_EQUATIONS_NO_OUTPUT,err)
