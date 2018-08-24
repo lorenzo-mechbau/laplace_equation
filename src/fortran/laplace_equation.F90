@@ -78,6 +78,7 @@ PROGRAM LAPLACE_EQUATION
   
   ! my variables
   INTEGER(CMISSIntg) :: count_components = 1  
+  CHARACTER(LEN=60) :: diagFilename
   
 #ifdef WIN32
   !Initialise QuickWin
@@ -107,9 +108,27 @@ PROGRAM LAPLACE_EQUATION
   !CALL cmfe_DiagnosticsSetOn(CMFE_IN_DIAG_TYPE,[1,2],"",&
   !  & ["DECOMPOSITION_ADJACENT_DOMAINS_CALCULATE"],Err)
 
-  CALL cmfe_DiagnosticsSetOn(CMFE_IN_DIAG_TYPE,[2],"",&
-    & ["FIELD_MAPPINGS_CALCULATE"],Err)
+  ! Print out of nodes/els mapping (old implementation) + dofs (new implementation)
+  !CALL cmfe_DiagnosticsSetOn(CMFE_IN_DIAG_TYPE,[2],"Diagnostics",&
+  !  & ["FIELD_MAPPINGS_CALCULATE"],Err)
 
+  ! Determine name of diagnostics file according to branch
+  SELECT CASE(CMFE_BENJAMIN)
+  CASE (CMFE_B_ORIGINAL)
+    diagFilename = "Diag_original"
+  CASE (CMFE_B_MERGE)
+    diagFilename = "Diag_merge"
+  CASE (CMFE_B_FACES)
+    diagFilename = "Diag_faces"
+  CASE DEFAULT
+    diagFilename = "Diag_other"
+  END SELECT
+
+
+  CALL cmfe_DiagnosticsSetOn(CMFE_IN_DIAG_TYPE,[1,2,3],TRIM(diagFileName),&
+    & ["DOMAIN_MAPPINGS_NODES_CALCULATE", &
+    &  "DOMAIN_MAPPINGS_INITIALISE     "], Err)
+!    &  "FIELD_MAPPINGS_CALCULATE       "],Err)
   
   
   !CALL cmfe_OutputSetOn("diagnostics.txt",Err)
@@ -356,10 +375,10 @@ PROGRAM LAPLACE_EQUATION
   !!CALL cmfe_Field_NumberOfComponentsSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,7,Err)
 
   !1 vbl, 1 component: 1x Mesh (node-dofs)
-  CALL cmfe_Field_NumberOfComponentsSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,1,Err)
+  ! CALL cmfe_Field_NumberOfComponentsSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,1,Err)
  
   !1 vbl, 2 components: 2x Mesh (node-dofs)
-  !CALL cmfe_Field_NumberOfComponentsSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,2,Err)
+  CALL cmfe_Field_NumberOfComponentsSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,2,Err)
  
   !1 vbl, 3 components: 2x Mesh (node-dofs), 1x Interpolation (element-dofs)
   !CALL cmfe_Field_NumberOfComponentsSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,3,Err)
@@ -369,7 +388,7 @@ PROGRAM LAPLACE_EQUATION
 
   CALL cmfe_Field_ComponentMeshComponentSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,count_components,1,Err)
   count_components = count_components +1
-!  CALL cmfe_Field_ComponentMeshComponentSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,count_components,1,Err)
+  CALL cmfe_Field_ComponentMeshComponentSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,count_components,1,Err)
 !  count_components = count_components +1
 !  CALL cmfe_Field_ComponentInterpolationSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,count_components, &
 !  & CMFE_FIELD_ELEMENT_BASED_INTERPOLATION,Err)
