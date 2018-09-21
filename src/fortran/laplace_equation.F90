@@ -37,7 +37,12 @@ PROGRAM LaplaceEquation
   !CMISS variables
   TYPE(cmfe_BasisType) :: basis
   TYPE(cmfe_BoundaryConditionsType) :: boundaryConditions
-  TYPE(cmfe_ComputationEnvironmentType) :: computationEnvironment
+
+  TYPE(cmfe_ComputationEnvironmentType) :: computationEnvironment 
+  ! This does not exist! -> Make fails!!!
+  ! ComputationalEnvironmentType defined private in Computational_Environment.f90. 
+  ! Where is cmfe_???
+                              
   TYPE(cmfe_CoordinateSystemType) :: coordinateSystem,worldCoordinateSystem
   TYPE(cmfe_DecompositionType) :: decomposition
   TYPE(cmfe_EquationsType) :: equations
