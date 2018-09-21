@@ -358,7 +358,7 @@ PROGRAM LAPLACE_EQUATION
   !CALL cmfe_PrintField(GeometricField,3,5,Err)
   
   PRINT *, "Abort program in laplace_equation.f90:360"
-  STOP
+  !STOP
  
   
   !Update the geometric field parameters
