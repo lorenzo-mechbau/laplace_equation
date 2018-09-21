@@ -1,4 +1,4 @@
-add_executable(${ExampleName}_Fortran ${ExampleName}.F90)
+add_executable(${ExampleName}_Fortran ${ExampleName}.F90 hash_routines_local.F90)
 
 target_link_libraries(${ExampleName}_Fortran PRIVATE opencmisslibs)
 
