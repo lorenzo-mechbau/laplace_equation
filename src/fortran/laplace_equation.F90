@@ -158,7 +158,7 @@ PROGRAM LAPLACE_EQUATION
  
 !CALL cmfe_DiagnosticsSetOn(CMFE_IN_DIAG_TYPE,[1,2,3,4,5],"Diagnostics",["HashTable_PutAll              ",& 
 !                                                                       &"Laplace_FiniteElementCalculate"],err)
-CALL cmfe_DiagnosticsSetOn(CMFE_IN_DIAG_TYPE,[1,2,3,4,5],"Diagnostics",&
+  CALL cmfe_DiagnosticsSetOn(CMFE_IN_DIAG_TYPE,[1,2,3,4,5],"Diagnostics",&
     & ["HashTable_PutAll                 ",&
     &  "HashTable_PutOne                 ",&
     &  "HashTable_Insert                 ",&
@@ -289,32 +289,32 @@ CALL cmfe_DiagnosticsSetOn(CMFE_IN_DIAG_TYPE,[1,2,3,4,5],"Diagnostics",&
 ! tree is built in DECOMPOSITION_TOPOLOGY_ELEMENTS_CALCULATE
 ! replace there with hash!?
 
-Err=0
-user_num_inc=1
+  ERR=0
+  user_num_inc=1
 
 ! Tree inquiry
-IF (.FALSE.) THEN
+  IF (.FALSE.) THEN
 
-  CALL HTable_Init(my_table, err, 5) ! create a hash table of dim 5 
+    CALL HTable_Init(my_table, err, 5) ! create a hash table of dim 5 
 
-  DO ! loop over all user numbers (elements)
+    DO ! loop over all user numbers (elements)
      ! which in this case correspond to global numbers
-   IF (Err==0) THEN
+      IF (Err==0) THEN
      !  SUBROUTINE DECOMPOSITION_ELEMENT_DOMAIN_GET(DECOMPOSITION,USER_ELEMENT_NUMBER,DOMAIN_NUMBER,ERR,ERROR,*)     
-     CALL cmfe_Decomposition_ElementDomainGet(Decomposition, user_num_inc, tree_DOMAIN_NUMBER, Err)
-     PRINT *, "Found in domain ", tree_DOMAIN_NUMBER
+        CALL cmfe_Decomposition_ElementDomainGet(Decomposition, user_num_inc, tree_DOMAIN_NUMBER, Err)
+        PRINT *, "Found in domain ", tree_DOMAIN_NUMBER
 
-     CALL HTable_Put (my_table, user_num_inc, user_num_inc, err) ! key and value are the same
+        CALL HTable_Put (my_table, user_num_inc, user_num_inc, err) ! key and value are the same
 
-     user_num_inc = user_num_inc+1  
+        user_num_inc = user_num_inc+1  
 
-   ELSE
-     EXIT
-   END IF
+      ELSE
+        EXIT
+      END IF
 
-  END DO
+    END DO
 
-END IF
+  END IF
 
 ! Decomposition topology is private!!! Then no calls here.
 ! SUBROUTINE DecompositionTopology_ElementCheckExists(decompositionTopology,userElementNumber,elementExists,localElementNumber, &
@@ -324,50 +324,50 @@ END IF
 !    & ghostElement,Err)
 
 ! Simple hash inquiry OLD, delete me!
-     ERR = 0 
-     user_num_inc = 1
+  ERR = 0 
+  user_num_inc = 1
 
-enters_if = .FALSE.
-IF (enters_if) THEN
-  DO
+  enters_if = .FALSE.
+  IF (enters_if) THEN
+    DO
      !CALL HTable_Get (my_table, user_num_inc, val, err) ! key and value are the same
-     IF (err==0) THEN
-      PRINT*, 'Hash:  ', MOD(user_num_inc,my_table%vec_len)
-      PRINT*, 'Value: ', val
-      user_num_inc = user_num_inc+1 
-     ELSE
-      EXIT
-     END IF 
-  END DO
+      IF (err==0) THEN
+        PRINT*, 'Hash:  ', MOD(user_num_inc,my_table%vec_len)
+        PRINT*, 'Value: ', val
+        user_num_inc = user_num_inc+1 
+      ELSE
+        EXIT
+      END IF 
+    END DO
 
-  CALL HTable_Free(my_table, err)
-  PRINT*, "Length of hash after destruction ", my_table%vec_len
-  PRINT*, "Initialised after destruction?", my_table%is_init
-END IF
+    CALL HTable_Free(my_table, err)
+    PRINT*, "Length of hash after destruction ", my_table%vec_len
+    PRINT*, "Initialised after destruction?", my_table%is_init
+  END IF
 
-! Test Fredman Hash
-enters_if = .FALSE.
-IF (enters_if) THEN
-  n = 6
-  p = 31
-  ALLOCATE(S_key(n), STAT=ERR)
-  ALLOCATE(S_val(n), STAT=ERR)
-  S_key = [2,4,5,15,18,30]
-  S_val = S_key+100
+  ! Test Fredman Hash
+  enters_if = .FALSE.
+  IF (enters_if) THEN
+    n = 6
+    p = 31
+    ALLOCATE(S_key(n), STAT=ERR)
+    ALLOCATE(S_val(n), STAT=ERR)
+    S_key = [2,4,5,15,18,30]
+    S_val = S_key+100
 
-  CALL HTable_Put_All(S_key, S_val, p, T_key, T_val, ERR)
-  ! query for q
+    CALL HTable_Put_All(S_key, S_val, p, T_key, T_val, ERR)
+    ! query for q
 
-  DO q=1,100
-    CALL HTable_Get(q, n, p, index_found, is_found, T_key, ERR)
-    !PRINT *, "Index ", index_found
-    IF (is_found) THEN
-     PRINT *, q, "Found! With value ", T_val(index_found)
-    ELSE
-     PRINT *, q, "Key does not exist!"
-    END IF 
-  END DO
-END IF
+    DO q=1,100
+      CALL HTable_Get(q, n, p, index_found, is_found, T_key, ERR)
+      !PRINT *, "Index ", index_found
+      IF (is_found) THEN
+        PRINT *, q, "Found! With value ", T_val(index_found)
+      ELSE
+        PRINT *, q, "Key does not exist!"
+      END IF 
+    END DO
+  END IF
 
 
 
@@ -450,8 +450,8 @@ END IF
 ! CALL cmfe_Equations_SparsityTypeSet(Equations,CMFE_EQUATIONS_FULL_MATRICES,Err)
  
   !Set the equations set output
-   CALL cmfe_Equations_OutputTypeSet(Equations,CMFE_EQUATIONS_NO_OUTPUT,Err)
-   CALL cmfe_Equations_OutputTypeSet(Equations,CMFE_EQUATIONS_TIMING_OUTPUT,Err)
+  CALL cmfe_Equations_OutputTypeSet(Equations,CMFE_EQUATIONS_NO_OUTPUT,Err)
+  CALL cmfe_Equations_OutputTypeSet(Equations,CMFE_EQUATIONS_TIMING_OUTPUT,Err)
 ! CALL cmfe_Equations_OutputTypeSet(Equations,CMFE_EQUATIONS_MATRIX_OUTPUT,Err)
 ! CALL cmfe_Equations_OutputTypeSet(Equations,CMFE_EQUATIONS_ELEMENT_MATRIX_OUTPUT,Err)
   
