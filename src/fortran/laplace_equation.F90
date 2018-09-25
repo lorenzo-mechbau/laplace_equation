@@ -176,8 +176,8 @@ PROGRAM LAPLACE_EQUATION
   CALL cmfe_OutputSetOn(Filename,Err)
   
   !Get the computational nodes information
-  CALL cmfe_ComputationalNumberOfNodesGet(NumberOfComputationalNodes,Err) ! that is 1
-  CALL cmfe_ComputationalNodeNumberGet(ComputationalNodeNumber,Err) ! that is 0
+  CALL cmfe_ComputationalNumberOfNodesGet(NumberOfComputationalNodes,Err) ! total number of ranks
+  CALL cmfe_ComputationalNodeNumberGet(ComputationalNodeNumber,Err) ! current rank
 
   !-----------------------------------------------------------------------------------------------------------
   !COORDINATE SYSTEM
