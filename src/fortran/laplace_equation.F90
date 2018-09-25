@@ -19,6 +19,9 @@ PROGRAM LAPLACE_EQUATION
 #include "mpif.h"
 #endif
 
+  ! Run with
+  ! mpirun -np 2 ./src/fortran/laplace_equation_Fortran 2 3 2 1 > out.txt
+
   !-----------------------------------------------------------------------------------------------------------
   ! PROGRAM VARIABLES AND TYPES
   !-----------------------------------------------------------------------------------------------------------
