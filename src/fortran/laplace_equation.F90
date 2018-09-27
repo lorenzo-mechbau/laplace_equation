@@ -1,4 +1,5 @@
 PROGRAM LaplaceEquation
+! From CB Contexts branch, modified to eliminate CONTEXTS and the new computation environment (until their integration into iron)
 
   USE OpenCMISS
   USE OpenCMISS_Iron
@@ -37,9 +38,9 @@ PROGRAM LaplaceEquation
   !CMISS variables
   TYPE(cmfe_BasisType) :: basis
   TYPE(cmfe_BoundaryConditionsType) :: boundaryConditions
-  TYPE(cmfe_ComputationEnvironmentType) :: computationEnvironment
-  TYPE(cmfe_ContextType) :: context
-  TYPE(cmfe_CoordinateSystemType) :: coordinateSystem
+  !TYPE(cmfe_ComputationEnvironmentType) :: computationEnvironment
+  !TYPE(cmfe_ContextType) :: context
+  TYPE(cmfe_CoordinateSystemType) :: coordinateSystem, worldCoordinateSystem
   TYPE(cmfe_DecompositionType) :: decomposition
   TYPE(cmfe_EquationsType) :: equations
   TYPE(cmfe_EquationsSetType) :: equationsSet
@@ -95,12 +96,14 @@ PROGRAM LaplaceEquation
   ENDIF
 
   !Intialise OpenCMISS
-  CALL cmfe_Context_Initialise(context,err)
-  CALL cmfe_Initialise(context,err)
+  !CALL cmfe_Context_Initialise(context,err)
+  !CALL cmfe_Initialise(context,err)
+  CALL cmfe_Initialise(worldCoordinateSystem,worldRegion,err)
   CALL cmfe_ErrorHandlingModeSet(CMFE_ERRORS_TRAP_ERROR,err)
-  CALL cmfe_Region_Initialise(worldRegion,err)
-  CALL cmfe_Context_WorldRegionGet(context,worldRegion,err)
-  CALL cmfe_Context_RandomSeedsSet(context,9999,err)
+  !CALL cmfe_Region_Initialise(worldRegion,err)
+  !CALL cmfe_Context_WorldRegionGet(context,worldRegion,err)
+  !CALL cmfe_Context_RandomSeedsSet(context,9999,err)
+  CALL cmfe_RandomSeedsSet(9999,Err)
   !CALL cmfe_DiagnosticsSetOn(CMFE_IN_DIAG_TYPE,[1,2,3,4,5],"Diagnostics",["Laplace_FiniteElementCalculate"],err)
 
   WRITE(filename,'(A,"_",I0,"x",I0,"x",I0,"_",I0)') "Laplace",numberOfGlobalXElements,numberOfGlobalYElements, &
@@ -109,10 +112,12 @@ PROGRAM LaplaceEquation
   CALL cmfe_OutputSetOn(filename,err)
 
   !Get the computational nodes information
-  CALL cmfe_ComputationEnvironment_Initialise(computationEnvironment,err)
-  CALL cmfe_Context_ComputationEnvironmentGet(context,computationEnvironment,err)
-  CALL cmfe_ComputationEnvironment_NumberOfWorldNodesGet(computationEnvironment,numberOfComputationalNodes,err)
-  CALL cmfe_ComputationEnvironment_WorldNodeNumberGet(computationEnvironment,computationalNodeNumber,err)
+  !CALL cmfe_ComputationEnvironment_Initialise(computationEnvironment,err)
+  !CALL cmfe_Context_ComputationEnvironmentGet(context,computationEnvironment,err)
+  !CALL cmfe_ComputationEnvironment_NumberOfWorldNodesGet(computationEnvironment,numberOfComputationalNodes,err)
+  !CALL cmfe_ComputationEnvironment_WorldNodeNumberGet(computationEnvironment,computationalNodeNumber,err)
+  CALL cmfe_ComputationalNumberOfNodesGet(NumberOfComputationalNodes,Err)
+  CALL cmfe_ComputationalNodeNumberGet(ComputationalNodeNumber,Err)
 
   !-----------------------------------------------------------------------------------------------------------
   ! COORDINATE SYSTEM
@@ -120,7 +125,8 @@ PROGRAM LaplaceEquation
 
   !Start the creation of a new RC coordinate system
   CALL cmfe_CoordinateSystem_Initialise(coordinateSystem,err)
-  CALL cmfe_CoordinateSystem_CreateStart(COORDINATE_SYSTEM_USER_NUMBER,context,coordinateSystem,err)
+  !CALL cmfe_CoordinateSystem_CreateStart(COORDINATE_SYSTEM_USER_NUMBER,context,coordinateSystem,err)
+  CALL cmfe_CoordinateSystem_CreateStart(COORDINATE_SYSTEM_USER_NUMBER,coordinateSystem,err)
   IF(numberOfGlobalZElements==0) THEN
     !Set the coordinate system to be 2D
     CALL cmfe_CoordinateSystem_DimensionSet(coordinateSystem,2,err)
@@ -151,7 +157,8 @@ PROGRAM LaplaceEquation
 
   !Start the creation of a basis (default is trilinear lagrange)
   CALL cmfe_Basis_Initialise(basis,err)
-  CALL cmfe_Basis_CreateStart(BASIS_USER_NUMBER,context,basis,err)
+  !CALL cmfe_Basis_CreateStart(BASIS_USER_NUMBER,context,basis,err)
+  CALL cmfe_Basis_CreateStart(BASIS_USER_NUMBER,basis,Err)
   SELECT CASE(interpolationType)
   CASE(1,2,3,4)
     CALL cmfe_Basis_TypeSet(basis,CMFE_BASIS_LAGRANGE_HERMITE_TP_TYPE,err)
@@ -299,7 +306,9 @@ PROGRAM LaplaceEquation
 
   !Start the creation of a problem.
   CALL cmfe_Problem_Initialise(problem,err)
-  CALL cmfe_Problem_CreateStart(PROBLEM_USER_NUMBER,context,[CMFE_PROBLEM_CLASSICAL_FIELD_CLASS, &
+  !CALL cmfe_Problem_CreateStart(PROBLEM_USER_NUMBER,context,[CMFE_PROBLEM_CLASSICAL_FIELD_CLASS, &
+  !  & CMFE_PROBLEM_LAPLACE_EQUATION_TYPE,CMFE_PROBLEM_STANDARD_LAPLACE_SUBTYPE],problem,err)
+  CALL cmfe_Problem_CreateStart(PROBLEM_USER_NUMBER,[CMFE_PROBLEM_CLASSICAL_FIELD_CLASS, &
     & CMFE_PROBLEM_LAPLACE_EQUATION_TYPE,CMFE_PROBLEM_STANDARD_LAPLACE_SUBTYPE],problem,err)
   !Finish the creation of a problem.
   CALL cmfe_Problem_CreateFinish(problem,err)
@@ -399,7 +408,8 @@ PROGRAM LaplaceEquation
   CALL cmfe_Fields_Finalise(fields,err)
 
   !Finialise OpenCMISS
-  CALL cmfe_Finalise(context,err)
+  !CALL cmfe_Finalise(context,err)
+  CALL cmfe_Finalise(err)
   WRITE(*,'(A)') "Program successfully completed."
   STOP
 
