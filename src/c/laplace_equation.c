@@ -50,7 +50,7 @@ int main(int argc, char *argv[])
 {
   cmfe_BasisType basis = (cmfe_BasisType)NULL;
   cmfe_BoundaryConditionsType boundaryConditions=(cmfe_BoundaryConditionsType)NULL;
-  cmfe_ComputationEnvironmentType computationEnvironment=(cmfe_ComputationEnvironmentType)NULL;
+  /*cmfe_ComputationEnvironmentType computationEnvironment=(cmfe_ComputationEnvironmentType)NULL;*/
   cmfe_CoordinateSystemType coordinateSystem=(cmfe_CoordinateSystemType)NULL,worldCoordinateSystem=(cmfe_CoordinateSystemType)NULL;
   cmfe_DecompositionType decomposition=(cmfe_DecompositionType)NULL;
   cmfe_EquationsType equations=(cmfe_EquationsType)NULL;
@@ -116,9 +116,9 @@ int main(int argc, char *argv[])
   err = cmfe_OutputSetOn(STRING_SIZE,filename);
 
   /* Get the computational nodes information */
-  err = cmfe_ComputationEnvironment_Initialise(&computationEnvironment);
-  err = cmfe_ComputationEnvironment_NumberOfWorldNodesGet(computationEnvironment,&numberOfComputationalNodes);
-  err = cmfe_ComputationEnvironment_WorldNodeNumberGet(computationEnvironment,&computationalNodeNumber);
+  //err = cmfe_ComputationEnvironment_Initialise(&computationEnvironment);
+  //err = cmfe_ComputationEnvironment_NumberOfWorldNodesGet(computationEnvironment,&numberOfComputationalNodes);
+  //err = cmfe_ComputationEnvironment_WorldNodeNumberGet(computationEnvironment,&computationalNodeNumber);
 
   /* Start the creation of a new RC coordinate system */
   err = cmfe_CoordinateSystem_Initialise(&coordinateSystem);

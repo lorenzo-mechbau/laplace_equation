@@ -39,7 +39,7 @@ PROGRAM LaplaceEquation
   TYPE(cmfe_BasisType) :: basis
   TYPE(cmfe_BoundaryConditionsType) :: boundaryConditions
 
-  TYPE(cmfe_ComputationEnvironmentType) :: computationEnvironment 
+  !TYPE(cmfe_ComputationEnvironmentType) :: computationEnvironment 
   ! This does not exist! -> Make fails!!!
   ! ComputationalEnvironmentType defined private in Computational_Environment.f90. 
   ! Where is cmfe_???
@@ -111,9 +111,11 @@ PROGRAM LaplaceEquation
   CALL cmfe_OutputSetOn(filename,err)
 
   !Get the computational nodes information
-  CALL cmfe_ComputationEnvironment_Initialise(computationEnvironment,err)
-  CALL cmfe_ComputationEnvironment_NumberOfWorldNodesGet(computationEnvironment,numberOfComputationalNodes,err)
-  CALL cmfe_ComputationEnvironment_WorldNodeNumberGet(computationEnvironment,computationalNodeNumber,err)
+  !CALL cmfe_ComputationEnvironment_Initialise(computationEnvironment,err)
+  !CALL cmfe_ComputationEnvironment_NumberOfWorldNodesGet(computationEnvironment,numberOfComputationalNodes,err)
+  !CALL cmfe_ComputationEnvironment_WorldNodeNumberGet(computationEnvironment,computationalNodeNumber,err)
+  CALL cmfe_ComputationalNumberOfNodesGet(numberOfComputationalNodes,Err)
+  CALL cmfe_ComputationalNodeNumberGet(computationalNodeNumber,Err)
 
   !-----------------------------------------------------------------------------------------------------------
   ! COORDINATE SYSTEM
