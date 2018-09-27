@@ -37,7 +37,7 @@ PROGRAM LaplaceEquation
   !CMISS variables
   TYPE(cmfe_BasisType) :: basis
   TYPE(cmfe_BoundaryConditionsType) :: boundaryConditions
-  TYPE(cmfe_ComputationEnvironmentType) :: computationEnvironment
+  !TYPE(cmfe_ComputationEnvironmentType) :: computationEnvironment
   TYPE(cmfe_CoordinateSystemType) :: coordinateSystem,worldCoordinateSystem
   TYPE(cmfe_DecompositionType) :: decomposition
   TYPE(cmfe_EquationsType) :: equations
@@ -105,9 +105,11 @@ PROGRAM LaplaceEquation
   CALL cmfe_OutputSetOn(filename,err)
 
   !Get the computational nodes information
-  CALL cmfe_ComputationEnvironment_Initialise(computationEnvironment,err)
-  CALL cmfe_ComputationEnvironment_NumberOfWorldNodesGet(computationEnvironment,numberOfComputationalNodes,err)
-  CALL cmfe_ComputationEnvironment_WorldNodeNumberGet(computationEnvironment,computationalNodeNumber,err)
+  !CALL cmfe_ComputationEnvironment_Initialise(computationEnvironment,err)
+  !CALL cmfe_ComputationEnvironment_NumberOfWorldNodesGet(computationEnvironment,numberOfComputationalNodes,err)
+  !CALL cmfe_ComputationEnvironment_WorldNodeNumberGet(computationEnvironment,computationalNodeNumber,err)
+  CALL cmfe_ComputationalNumberOfNodesGet(numberOfComputationalNodes,Err)
+  CALL cmfe_ComputationalNodeNumberGet(computationalNodeNumber,Err)
 
   !-----------------------------------------------------------------------------------------------------------
   ! COORDINATE SYSTEM
