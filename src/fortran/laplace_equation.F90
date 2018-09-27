@@ -1,4 +1,5 @@
 PROGRAM LaplaceEquation
+! From CB Develop branch, modified to eliminate the new computation environment (until integration into iron)
 
   USE OpenCMISS
   USE OpenCMISS_Iron
