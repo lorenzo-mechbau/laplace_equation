@@ -65,6 +65,10 @@ PROGRAM LaplaceEquation
   INTEGER(CMISSIntg) :: firstNodeDomain,lastNodeDomain
   INTEGER(CMISSIntg) :: err
 
+  !Additional variables
+  INTEGER(CMISSIntg), ALLOCATABLE ::elementUserNodes(:)
+  INTEGER(CMISSIntg) :: GlobalElementNo, columnNo, rowNo
+
   !-----------------------------------------------------------------------------------------------------------
   ! PROBLEM CONTROL PANEL
   !-----------------------------------------------------------------------------------------------------------
@@ -214,6 +218,25 @@ PROGRAM LaplaceEquation
   !Finish the creation of a generated mesh in the region
   CALL cmfe_Mesh_Initialise(mesh,err)
   CALL cmfe_GeneratedMesh_CreateFinish(generatedMesh,MESH_USER_NUMBER,mesh,err)
+
+  ! Just check the nodes distribution for a LINEAR BASIS on 2D mesh (-> 4 nodes / el)
+  IF (.TRUE.) THEN
+    ALLOCATE(elementUserNodes(4),STAT=Err)
+    DO RowNo = 1,numberOfGlobalXElements
+      DO ColumnNo = 1,numberOfGlobalYElements
+        GlobalElementNo = (RowNo-1)*numberOfGlobalYElements + ColumnNo
+        ! Check with nodes get
+        ! (assuming meshComponentNumber is 1)
+        CALL cmfe_MeshElements_NodesGet(REGION_USER_NUMBER,MESH_USER_NUMBER,1 &
+          & ,GlobalElementNo,elementUserNodes,Err)
+        PRINT *, "Element"
+        PRINT *, GlobalElementNo
+        PRINT *, "Nodes"
+        PRINT *, elementUserNodes          
+      ENDDO
+    ENDDO
+  END IF 
+
 
   !Create a decomposition
   CALL cmfe_Decomposition_Initialise(decomposition,err)
