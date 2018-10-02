@@ -37,6 +37,7 @@ PROGRAM LAPLACE_EQUATION
   INTEGER(CMISSIntg), PARAMETER :: DependentFieldUserNumber=10
   INTEGER(CMISSIntg), PARAMETER :: EquationsSetUserNumber=11
   INTEGER(CMISSIntg), PARAMETER :: ProblemUserNumber=12
+  INTEGER(CMISSIntg), PARAMETER :: GeneratedMeshUserNumber=13
  
   !Program types
   
@@ -60,6 +61,7 @@ PROGRAM LAPLACE_EQUATION
   TYPE(cmfe_FieldType) :: GeometricField,EquationsSetField,DependentField
   TYPE(cmfe_FieldsType) :: Fields
   TYPE(cmfe_MeshType) :: Mesh
+  TYPE(cmfe_GeneratedMeshType) :: generatedMesh
   TYPE(cmfe_NodesType) :: Nodes
   TYPE(cmfe_ProblemType) :: Problem
   TYPE(cmfe_RegionType) :: Region,WorldRegion
@@ -85,7 +87,9 @@ PROGRAM LAPLACE_EQUATION
   INTEGER(CMISSIntg) :: count_components = 1  
   CHARACTER(LEN=60) :: diagFilename
   INTEGER(CMISSIntg), ALLOCATABLE ::elementUserNodes(:)
-  
+  LOGICAL, PARAMETER             :: useGeneratedMesh = .FALSE.
+  LOGICAL, PARAMETER             :: allLinear = .TRUE. ! For MANUAL mesh, decide if all linear 
+                                                       ! or Hermite/linear (cf. Benjamin's example)  
 #ifdef WIN32
   !Initialise QuickWin
   QUICKWIN_WINDOW_CONFIG%TITLE="General Output" !Window title
@@ -295,61 +299,65 @@ PROGRAM LAPLACE_EQUATION
   !-----------------------------------------------------------------------------------------------------------
 
   !Start the creation of a generated mesh in the region
-  !CALL cmfe_GeneratedMesh_Initialise(generatedMesh,err)
-  !CALL cmfe_GeneratedMesh_CreateStart(GENERATED_MESH_USER_NUMBER,region,generatedMesh,err)
-  !Set up a regular x*y*z mesh
-  !CALL cmfe_GeneratedMesh_TypeSet(generatedMesh,CMFE_GENERATED_MESH_REGULAR_MESH_TYPE,err)
-  !Set the default basis
-  !CALL cmfe_GeneratedMesh_BasisSet(generatedMesh,basis,err)
-  !Define the mesh on the region
-  !IF(numberOfGlobalZElements==0) THEN
-  !  CALL cmfe_GeneratedMesh_ExtentSet(generatedMesh,[WIDTH,HEIGHT],err)
-  !  CALL cmfe_GeneratedMesh_NumberOfElementsSet(generatedMesh,[numberOfGlobalXElements,numberOfGlobalYElements],err)
-  !ELSE
-  !  CALL cmfe_GeneratedMesh_ExtentSet(generatedMesh,[WIDTH,HEIGHT,LENGTH],err)
-  !  CALL cmfe_GeneratedMesh_NumberOfElementsSet(generatedMesh,[numberOfGlobalXElements,numberOfGlobalYElements, &
-  !    & numberOfGlobalZElements],err)
-  !ENDIF
-  !Finish the creation of a generated mesh in the region
-  !CALL cmfe_Mesh_Initialise(mesh,err)
-  !CALL cmfe_GeneratedMesh_CreateFinish(generatedMesh,MESH_USER_NUMBER,mesh,err)
+  IF (useGeneratedMesh) THEN
 
-  ! Create mesh as specified in "PartitionedMesh_4x4.pdf"
+    CALL cmfe_GeneratedMesh_Initialise(generatedMesh,err)
+    CALL cmfe_GeneratedMesh_CreateStart(GeneratedMeshUserNumber,Region,generatedMesh,err)
+    !Set up a regular x*y*z mesh
+    CALL cmfe_GeneratedMesh_TypeSet(generatedMesh,CMFE_GENERATED_MESH_REGULAR_MESH_TYPE,err)
+    !Set the default basis
+    !Using different basis types is not supported for generated meshes! ==> ALL LINEAR!!!
+    CALL cmfe_GeneratedMesh_BasisSet(generatedMesh,LinearBasis,err) 
+    !Define the mesh on the region
+    IF(numberOfGlobalZElements==0) THEN
+      CALL cmfe_GeneratedMesh_ExtentSet(generatedMesh,[WIDTH,HEIGHT],err)
+      CALL cmfe_GeneratedMesh_NumberOfElementsSet(generatedMesh,[numberOfGlobalXElements,numberOfGlobalYElements],err)
+    ELSE
+      CALL cmfe_GeneratedMesh_ExtentSet(generatedMesh,[WIDTH,HEIGHT,LENGTH],err)
+      CALL cmfe_GeneratedMesh_NumberOfElementsSet(generatedMesh,[numberOfGlobalXElements,numberOfGlobalYElements, &
+        & numberOfGlobalZElements],err)
+    ENDIF
+    !Finish the creation of a generated mesh in the region
+    CALL cmfe_Mesh_Initialise(Mesh,err)
+    CALL cmfe_GeneratedMesh_CreateFinish(generatedMesh,MeshUserNumber,Mesh,err)
+
+  ELSE
+  ! Create MANUAL mesh as specified in "PartitionedMesh_4x4.pdf"
   
-  CALL cmfe_Mesh_Initialise(Mesh,Err)
-  CALL cmfe_Mesh_CreateStart(MeshUserNumber,Region,2,Mesh,Err) ! 2 is number of dim
-  CALL cmfe_Mesh_NumberOfComponentsSet(Mesh,1,Err)
+    CALL cmfe_Mesh_Initialise(Mesh,Err)
+    CALL cmfe_Mesh_CreateStart(MeshUserNumber,Region,2,Mesh,Err) ! 2 is number of dim
+    CALL cmfe_Mesh_NumberOfComponentsSet(Mesh,1,Err)
 
-  NumberOfElements = 16
-  ! Special case 3 nodes
-  IF (NumberOfComputationalNodes == 3) NumberOfElements = 3
+    NumberOfElements = 16
+    ! Special case 3 nodes
+    IF (NumberOfComputationalNodes == 3) NumberOfElements = 3
 
-  CALL cmfe_Mesh_NumberOfElementsSet(Mesh,NumberOfElements,Err)
+    CALL cmfe_Mesh_NumberOfElementsSet(Mesh,NumberOfElements,Err)
   
-  ! Create elements 
-  CALL cmfe_MeshElements_Initialise(MeshElements,Err)
-  CALL cmfe_MeshElements_CreateStart(Mesh,1,LinearBasis,MeshElements,Err)
+    ! Create elements 
+    CALL cmfe_MeshElements_Initialise(MeshElements,Err)
+    CALL cmfe_MeshElements_CreateStart(Mesh,1,LinearBasis,MeshElements,Err)
   
-  ! Define nodes for the mesh
-  CALL cmfe_Nodes_Initialise(Nodes,Err)
+    ! Define nodes for the mesh
+    CALL cmfe_Nodes_Initialise(Nodes,Err)
 
-  NumberOfNodes = 25
-  ! Special case 3 nodes
-  IF (NumberOfComputationalNodes == 3) NumberOfNodes = 8
+    NumberOfNodes = 25
+    ! Special case 3 nodes
+    IF (NumberOfComputationalNodes == 3) NumberOfNodes = 8
 
-  CALL cmfe_Nodes_CreateStart(Region,NumberOfNodes,Nodes,Err)
-  CALL cmfe_Nodes_CreateFinish(Nodes,Err)
+    CALL cmfe_Nodes_CreateStart(Region,NumberOfNodes,Nodes,Err)
+    CALL cmfe_Nodes_CreateFinish(Nodes,Err)
 
   ! Special case 3 nodes
   ! Set adjacent nodes for each element
-  IF (NumberOfComputationalNodes == 3) THEN
-    CALL cmfe_MeshElements_NodesSet(MeshElements, 1, [1,2,5,6], Err)
-    CALL cmfe_MeshElements_NodesSet(MeshElements, 2, [2,3,6,7], Err)
-    CALL cmfe_MeshElements_NodesSet(MeshElements, 3, [3,4,7,8], Err)
-    CALL cmfe_MeshElements_BasisSet(MeshElements,1,LinearBasis,Err)
-    CALL cmfe_MeshElements_BasisSet(MeshElements,2,HermiteBasis,Err)
-    CALL cmfe_MeshElements_BasisSet(MeshElements,3,LinearBasis,Err)
-  ELSE
+    IF (NumberOfComputationalNodes == 3) THEN
+      CALL cmfe_MeshElements_NodesSet(MeshElements, 1, [1,2,5,6], Err)
+      CALL cmfe_MeshElements_NodesSet(MeshElements, 2, [2,3,6,7], Err)
+      CALL cmfe_MeshElements_NodesSet(MeshElements, 3, [3,4,7,8], Err)
+      CALL cmfe_MeshElements_BasisSet(MeshElements,1,LinearBasis,Err)
+      CALL cmfe_MeshElements_BasisSet(MeshElements,2,HermiteBasis,Err)
+      CALL cmfe_MeshElements_BasisSet(MeshElements,3,LinearBasis,Err)
+    ELSE
 
     ! Distribute nodes among elements (cf. picture)
     DO RowNo = 1,4
@@ -364,34 +372,37 @@ PROGRAM LAPLACE_EQUATION
         PRINT *, GlobalElementNo
         PRINT *, "Nodes"
         PRINT *, [GlobalNodeNo,GlobalNodeNo+1,GlobalNodeNo+5,GlobalNodeNo+6]          
+      END DO
+    END DO
+
+      ! Set the basis
+      !IF (.FALSE.) THEN
+    IF (.NOT.allLinear) THEN
+      DO GlobalElementNo=1,4
+        CALL cmfe_MeshElements_BasisSet(MeshElements,GlobalElementNo,HermiteBasis,Err)
       ENDDO
-    ENDDO
+      DO GlobalElementNo=5,12
+        CALL cmfe_MeshElements_BasisSet(MeshElements,GlobalElementNo,LinearBasis,Err)
+      ENDDO
+      DO GlobalElementNo=13,16
+        CALL cmfe_MeshElements_BasisSet(MeshElements,GlobalElementNo,HermiteBasis,Err)
+      ENDDO
+    ELSE    ! all linear
+      DO GlobalElementNo=1,16
+        CALL cmfe_MeshElements_BasisSet(MeshElements,GlobalElementNo,LinearBasis,Err)
+      ENDDO
+    ENDIF
 
-    ! Set the basis
-    !IF (.FALSE.) THEN
-    DO GlobalElementNo=1,4
-      CALL cmfe_MeshElements_BasisSet(MeshElements,GlobalElementNo,HermiteBasis,Err)
-    ENDDO
-    DO GlobalElementNo=5,12
-      CALL cmfe_MeshElements_BasisSet(MeshElements,GlobalElementNo,LinearBasis,Err)
-    ENDDO
-    DO GlobalElementNo=13,16
-      CALL cmfe_MeshElements_BasisSet(MeshElements,GlobalElementNo,HermiteBasis,Err)
-    ENDDO
-    !ELSE    
-    !DO GlobalElementNo=1,16
-    !  CALL cmfe_MeshElements_BasisSet(MeshElements,GlobalElementNo,LinearBasis,Err)
-    !ENDDO
-    !ENDIF
-
-  ENDIF
+  END IF ! number of comp. nodes (3 vs. other)
   
   CALL cmfe_MeshElements_CreateFinish(MeshElements,Err)
   
   CALL cmfe_Mesh_CreateFinish(Mesh,Err)
 
-  ! Just check the nodes distribution
-  IF (.TRUE.) THEN
+  END IF
+
+  ! Check the nodes distribution
+  IF (.NOT. useGeneratedMesh) THEN
     ALLOCATE(elementUserNodes(4),STAT=Err)
     DO RowNo = 1,4
       DO ColumnNo = 1,4
@@ -409,9 +420,14 @@ PROGRAM LAPLACE_EQUATION
   !Create a decomposition
   CALL cmfe_Decomposition_Initialise(Decomposition,Err)
   CALL cmfe_Decomposition_CreateStart(DecompositionUserNumber,Mesh,Decomposition,Err)
-! Set the decomposition to be a general decomposition with the specified number of domains
-  
-  !CALL cmfe_Decomposition_TypeSet(Decomposition,CMFE_DECOMPOSITION_CALCULATED_TYPE,Err)
+  ! Set the decomposition to be a general decomposition with the specified number of domains
+
+  ! Standard (old) decomposition
+  ! No need
+  !CALL cmfe_Decomposition_TypeSet(decomposition,CMFE_DECOMPOSITION_CALCULATED_TYPE,err)
+  !CALL cmfe_Decomposition_NumberOfDomainsSet(Decomposition,NumberOfComputationalNodes,Err)
+
+  ! User-defined decomposition
   CALL cmfe_Decomposition_TypeSet(Decomposition,CMFE_DECOMPOSITION_USER_DEFINED_TYPE,Err)
   
   CALL cmfe_Decomposition_NumberOfDomainsSet(Decomposition,NumberOfComputationalNodes,Err)
@@ -558,10 +574,69 @@ PROGRAM LAPLACE_EQUATION
   !STOP
  
   
-  !Update the geometric field parameters
-  ! Comment out if mesh is NOT a generated mesh 
-  !CALL cmfe_GeneratedMesh_GeometricParametersCalculate(GeneratedMesh,GeometricField,Err)
-  
+  ! Update the geometric field parameters
+  IF (useGeneratedMesh) THEN
+    CALL cmfe_GeneratedMesh_GeometricParametersCalculate(generatedMesh,GeometricField,Err)
+  ELSE
+    ! Update the geometric field parameters manually if mesh is NOT a generated mesh
+    CALL cmfe_Field_ParameterSetUpdateStart(geometricField, &
+      & CMFE_FIELD_U_VARIABLE_TYPE,CMFE_FIELD_VALUES_SET_TYPE,Err)
+    ! node 1
+    !SUBROUTINE FIELD_PARAMETER_SET_UPDATE_NODE_INTG(FIELD,VARIABLE_TYPE,FIELD_SET_TYPE,VERSION_NUMBER,DERIVATIVE_NUMBER, &
+    !  & USER_NODE_NUMBER,COMPONENT_NUMBER,VALUE,ERR,ERROR,*)
+    DO I=1,NumberOfNodes
+      SELECT CASE (I)
+      CASE (1,6,11,16,21)
+        CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+          & CMFE_FIELD_VALUES_SET_TYPE,1,1,I,1,0.0_CMISSRP,Err)
+      CASE (2,7,12,17,22)
+        CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+          & CMFE_FIELD_VALUES_SET_TYPE,1,1,I,1,WIDTH/4.0_CMISSRP,Err)
+      CASE (3,8,13,18,23)
+        CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+          & CMFE_FIELD_VALUES_SET_TYPE,1,1,I,1,WIDTH/2.0_CMISSRP,Err)
+      CASE (4,9,14,19,24)
+        CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+          & CMFE_FIELD_VALUES_SET_TYPE,1,1,I,1,3.0_CMISSRP*WIDTH/4.0_CMISSRP,Err)
+      CASE (5,10,15,20,25)
+        CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+          & CMFE_FIELD_VALUES_SET_TYPE,1,1,I,1,WIDTH,Err)
+      CASE DEFAULT
+        CALL HandleError("Node out of reach!")
+      END SELECT
+
+      SELECT CASE (I)
+      CASE (1,2,3,4,5)
+        CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+          & CMFE_FIELD_VALUES_SET_TYPE,1,1,I,2,0.0_CMISSRP,Err)
+      CASE (6,7,8,9,10)
+        CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+          & CMFE_FIELD_VALUES_SET_TYPE,1,1,I,2,WIDTH/4.0_CMISSRP,Err)
+      CASE (11,12,13,14,15)
+        CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+          & CMFE_FIELD_VALUES_SET_TYPE,1,1,I,2,WIDTH/2.0_CMISSRP,Err)      
+      CASE (16,17,18,19,20)
+        CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+          & CMFE_FIELD_VALUES_SET_TYPE,1,1,I,2,3.0_CMISSRP*WIDTH/4.0_CMISSRP,Err)
+      CASE (21,22,23,24,25)
+        CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+          & CMFE_FIELD_VALUES_SET_TYPE,1,1,I,2,WIDTH,Err)
+      CASE DEFAULT
+        CALL HandleError("Node out of reach!")
+      END SELECT
+
+    END DO
+
+    IF(numberOfGlobalZElements/=0) THEN
+      CALL HandleError("Node out of reach!")
+    END IF
+ 
+    CALL cmfe_Field_ParameterSetUpdateFinish(geometricField, &
+      & CMFE_FIELD_U_VARIABLE_TYPE,CMFE_FIELD_VALUES_SET_TYPE,Err)
+    
+    !CALL HandleError("No geometric field parameters update for manual mesh! Cannot solve!")
+
+  END IF
   
 
   !-----------------------------------------------------------------------------------------------------------
