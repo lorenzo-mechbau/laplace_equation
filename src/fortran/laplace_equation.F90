@@ -87,7 +87,7 @@ PROGRAM LAPLACE_EQUATION
   INTEGER(CMISSIntg) :: count_components = 1  
   CHARACTER(LEN=60) :: diagFilename
   INTEGER(CMISSIntg), ALLOCATABLE ::elementUserNodes(:)
-  LOGICAL, PARAMETER             :: useGeneratedMesh = .FALSE.
+  LOGICAL, PARAMETER             :: useGeneratedMesh = .FALSE. ! FALSE: Manual entries
   LOGICAL, PARAMETER             :: allLinear = .TRUE. ! For MANUAL mesh, decide if all linear 
                                                        ! or Hermite/linear (cf. Benjamin's example)  
 #ifdef WIN32
@@ -399,7 +399,7 @@ PROGRAM LAPLACE_EQUATION
   
   CALL cmfe_Mesh_CreateFinish(Mesh,Err)
 
-  END IF
+  END IF ! generated mesh or manual mesh
 
   ! Check the nodes distribution
   IF (.NOT. useGeneratedMesh) THEN
@@ -584,6 +584,9 @@ PROGRAM LAPLACE_EQUATION
     ! node 1
     !SUBROUTINE FIELD_PARAMETER_SET_UPDATE_NODE_INTG(FIELD,VARIABLE_TYPE,FIELD_SET_TYPE,VERSION_NUMBER,DERIVATIVE_NUMBER, &
     !  & USER_NODE_NUMBER,COMPONENT_NUMBER,VALUE,ERR,ERROR,*)
+
+    ! Hermite: Derivative not 1?????????????? CHECK!!!!!!!!!!!!!!!!!!!!!!!!!
+
     DO I=1,NumberOfNodes
       SELECT CASE (I)
       CASE (1,6,11,16,21)
