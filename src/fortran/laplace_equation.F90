@@ -23,8 +23,8 @@ PROGRAM LAPLACE_EQUATION
   
   !Test program parameters
   REAL(CMISSRP), PARAMETER :: HEIGHT=1.0_CMISSRP
-  REAL(CMISSRP), PARAMETER :: WIDTH=1.0_CMISSRP
-  REAL(CMISSRP), PARAMETER :: LENGTH=1.0_CMISSRP
+  REAL(CMISSRP), PARAMETER :: WIDTH=2.0_CMISSRP
+  REAL(CMISSRP), PARAMETER :: LENGTH=3.0_CMISSRP
 
   INTEGER(CMISSIntg), PARAMETER :: CoordinateSystemUserNumber=1
   INTEGER(CMISSIntg), PARAMETER :: RegionUserNumber=2
@@ -88,8 +88,9 @@ PROGRAM LAPLACE_EQUATION
   CHARACTER(LEN=60) :: diagFilename
   INTEGER(CMISSIntg), ALLOCATABLE ::elementUserNodes(:)
   LOGICAL, PARAMETER             :: useGeneratedMesh = .FALSE. ! FALSE: Manual entries
-  LOGICAL, PARAMETER             :: allLinear = .TRUE. ! For MANUAL mesh, decide if all linear 
-                                                       ! or Hermite/linear (cf. Benjamin's example)  
+  INTEGER(CMISSIntg) :: whichBasis=2 ! For MANUAL mesh, decide if all linear (2), all Hermite (3)
+                                   ! or Hermite/linear (1) (cf. Benjamin's example)
+                                   ! Generated mesh: only 2 and 3 (NO mix)!!!  
 #ifdef WIN32
   !Initialise QuickWin
   QUICKWIN_WINDOW_CONFIG%TITLE="General Output" !Window title
@@ -207,7 +208,7 @@ PROGRAM LAPLACE_EQUATION
   !Start the creation of the region
   CALL cmfe_Region_Initialise(Region,Err)
   CALL cmfe_Region_CreateStart(RegionUserNumber,WorldRegion,Region,Err)
-  CALL cmfe_Region_LabelSet(Region,"LaplaceEquation",Err)
+  CALL cmfe_Region_LabelSet(Region,"laplace_equation",Err)
   !Set the regions coordinate system to the 2D RC coordinate system that we have created
   CALL cmfe_Region_CoordinateSystemSet(Region,CoordinateSystem,Err)
   !Finish the creation of the region
@@ -377,7 +378,8 @@ PROGRAM LAPLACE_EQUATION
 
       ! Set the basis
       !IF (.FALSE.) THEN
-    IF (.NOT.allLinear) THEN
+    SELECT CASE (whichBasis)
+    CASE(1) ! mix    
       DO GlobalElementNo=1,4
         CALL cmfe_MeshElements_BasisSet(MeshElements,GlobalElementNo,HermiteBasis,Err)
       ENDDO
@@ -387,11 +389,17 @@ PROGRAM LAPLACE_EQUATION
       DO GlobalElementNo=13,16
         CALL cmfe_MeshElements_BasisSet(MeshElements,GlobalElementNo,HermiteBasis,Err)
       ENDDO
-    ELSE    ! all linear
+    CASE(2) ! all linear
       DO GlobalElementNo=1,16
         CALL cmfe_MeshElements_BasisSet(MeshElements,GlobalElementNo,LinearBasis,Err)
       ENDDO
-    ENDIF
+    CASE(3) ! all Hermite
+      DO GlobalElementNo=1,16
+        CALL cmfe_MeshElements_BasisSet(MeshElements,GlobalElementNo,HermiteBasis,Err)
+      ENDDO
+    CASE DEFAULT
+      CALL HandleError("Basis choice not supported!!!")
+    END SELECT
 
   END IF ! number of comp. nodes (3 vs. other)
   
@@ -614,16 +622,16 @@ PROGRAM LAPLACE_EQUATION
           & CMFE_FIELD_VALUES_SET_TYPE,1,1,I,2,0.0_CMISSRP,Err)
       CASE (6,7,8,9,10)
         CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
-          & CMFE_FIELD_VALUES_SET_TYPE,1,1,I,2,WIDTH/4.0_CMISSRP,Err)
+          & CMFE_FIELD_VALUES_SET_TYPE,1,1,I,2,HEIGHT/4.0_CMISSRP,Err)
       CASE (11,12,13,14,15)
         CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
-          & CMFE_FIELD_VALUES_SET_TYPE,1,1,I,2,WIDTH/2.0_CMISSRP,Err)      
+          & CMFE_FIELD_VALUES_SET_TYPE,1,1,I,2,HEIGHT/2.0_CMISSRP,Err)      
       CASE (16,17,18,19,20)
         CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
-          & CMFE_FIELD_VALUES_SET_TYPE,1,1,I,2,3.0_CMISSRP*WIDTH/4.0_CMISSRP,Err)
+          & CMFE_FIELD_VALUES_SET_TYPE,1,1,I,2,3.0_CMISSRP*HEIGHT/4.0_CMISSRP,Err)
       CASE (21,22,23,24,25)
         CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
-          & CMFE_FIELD_VALUES_SET_TYPE,1,1,I,2,WIDTH,Err)
+          & CMFE_FIELD_VALUES_SET_TYPE,1,1,I,2,HEIGHT,Err)
       CASE DEFAULT
         CALL HandleError("Node out of reach!")
       END SELECT
@@ -662,9 +670,15 @@ PROGRAM LAPLACE_EQUATION
   !Create the equations set dependent field variables
   CALL cmfe_Field_Initialise(DependentField,Err)
   CALL cmfe_EquationsSet_DependentCreateStart(EquationsSet,DependentFieldUserNumber,DependentField,Err)
-  !Set the DOFs to be contiguous across components
-  CALL cmfe_Field_DOFOrderTypeSet(DependentField,CMFE_FIELD_U_VARIABLE_TYPE,CMFE_FIELD_SEPARATED_COMPONENT_DOF_ORDER,Err)
-  CALL cmfe_Field_DOFOrderTypeSet(DependentField,CMFE_FIELD_DELUDELN_VARIABLE_TYPE,CMFE_FIELD_SEPARATED_COMPONENT_DOF_ORDER,Err)
+
+  !Set the DOFs to be contiguous(?????) across components
+  !FIELD_SEPARATED_COMPONENT_DOF_ORDER vs. FIELD_CONTIGUOUS_COMPONENT_DOF_ORDER
+  !Note: for contiguous component DOF ordering all the components of the field variable 
+  ! must have the same interpolation type.
+  !CALL cmfe_Field_DOFOrderTypeSet(DependentField,CMFE_FIELD_U_VARIABLE_TYPE,CMFE_FIELD_SEPARATED_COMPONENT_DOF_ORDER,Err)
+  !CALL cmfe_Field_DOFOrderTypeSet(DependentField,CMFE_FIELD_DELUDELN_VARIABLE_TYPE,CMFE_FIELD_SEPARATED_COMPONENT_DOF_ORDER,Err)
+  CALL cmfe_Field_DOFOrderTypeSet(DependentField,CMFE_FIELD_U_VARIABLE_TYPE,CMFE_FIELD_CONTIGUOUS_COMPONENT_DOF_ORDER,Err)
+  CALL cmfe_Field_DOFOrderTypeSet(DependentField,CMFE_FIELD_DELUDELN_VARIABLE_TYPE,CMFE_FIELD_CONTIGUOUS_COMPONENT_DOF_ORDER,Err)
   !Finish the equations set dependent field variables
   CALL cmfe_EquationsSet_DependentCreateFinish(EquationsSet,Err)
 
@@ -792,8 +806,8 @@ PROGRAM LAPLACE_EQUATION
   !Export results
   CALL cmfe_Fields_Initialise(Fields,Err)
   CALL cmfe_Fields_Create(Region,Fields,Err)
-  CALL cmfe_Fields_NodesExport(Fields,"LaplaceEquation","FORTRAN",Err)
-  CALL cmfe_Fields_ElementsExport(Fields,"LaplaceEquation","FORTRAN",Err)
+  CALL cmfe_Fields_NodesExport(Fields,"laplace_equation","FORTRAN",Err)
+  CALL cmfe_Fields_ElementsExport(Fields,"laplace_equation","FORTRAN",Err)
   CALL cmfe_Fields_Finalise(Fields,Err)
   
   !Finialise CMISS
