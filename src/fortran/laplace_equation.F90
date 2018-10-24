@@ -38,12 +38,7 @@ PROGRAM LaplaceEquation
   !CMISS variables
   TYPE(cmfe_BasisType) :: basis
   TYPE(cmfe_BoundaryConditionsType) :: boundaryConditions
-
-  !TYPE(cmfe_ComputationEnvironmentType) :: computationEnvironment 
-  ! This does not exist! -> Make fails!!!
-  ! ComputationalEnvironmentType defined private in Computational_Environment.f90. 
-  ! Where is cmfe_???
-                              
+                            
   TYPE(cmfe_CoordinateSystemType) :: coordinateSystem,worldCoordinateSystem
   TYPE(cmfe_DecompositionType) :: decomposition
   TYPE(cmfe_EquationsType) :: equations
@@ -221,8 +216,17 @@ PROGRAM LaplaceEquation
 
   ! Just check the nodes distribution for a LINEAR BASIS on 2D mesh (-> 4 nodes / el)
   IF (.TRUE.) THEN
-    ALLOCATE(elementUserNodes(4),STAT=Err)
-    DO RowNo = 1,numberOfGlobalXElements
+    IF (numberOfGlobalZElements==1 .AND. interpolationType==CMFE_BASIS_LINEAR_LAGRANGE_INTERPOLATION) THEN
+      ALLOCATE(elementUserNodes(8),STAT=Err)
+      IF(ERR/=0) CALL HandleError("Allocation Error!")
+    ELSE IF (numberOfGlobalZElements==0 .AND. interpolationType==CMFE_BASIS_LINEAR_LAGRANGE_INTERPOLATION) THEN
+      ALLOCATE(elementUserNodes(4),STAT=Err)
+      IF(ERR/=0) CALL HandleError("Allocation Error!")
+    ELSE
+      CALL HandleError("Combination is unknown for this example!")
+    END IF
+ 
+   DO RowNo = 1,numberOfGlobalXElements
       DO ColumnNo = 1,numberOfGlobalYElements
         GlobalElementNo = (RowNo-1)*numberOfGlobalYElements + ColumnNo
         ! Check with nodes get
