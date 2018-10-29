@@ -119,8 +119,8 @@ int main(int argc, char *argv[])
   //err = cmfe_ComputationEnvironment_Initialise(&computationEnvironment);
   //err = cmfe_ComputationEnvironment_NumberOfWorldNodesGet(computationEnvironment,&numberOfComputationalNodes);
   //err = cmfe_ComputationEnvironment_WorldNodeNumberGet(computationEnvironment,&computationalNodeNumber);
-  err = cmfe_ComputationalNumberOfNodesGet(numberOfComputationalNodes);
-  err = cmfe_ComputationalNodeNumberGet(computationalNodeNumber);
+  err = cmfe_ComputationalNumberOfNodesGet(&numberOfComputationalNodes);
+  err = cmfe_ComputationalNodeNumberGet(&computationalNodeNumber);
 
   /* Start the creation of a new RC coordinate system */
   err = cmfe_CoordinateSystem_Initialise(&coordinateSystem);
