@@ -25,8 +25,8 @@ length = 3.0
     equationsSetUserNumber,
     problemUserNumber) = range(1,12)
 
-numberGlobalXElements = 1
-numberGlobalYElements = 3
+numberGlobalXElements = 1 #4 #more elements if parallel run
+numberGlobalYElements = 3 #4 #more elements if parallel run
 numberGlobalZElements = 1
 
 #-----------------------------------------------------------------------------------------------------------
