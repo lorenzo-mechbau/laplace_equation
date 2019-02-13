@@ -47,8 +47,10 @@ PROGRAM LAPLACE_EQUATION
 
   INTEGER(CMISSIntg) :: numberOfArguments,argumentLength,status
   INTEGER(CMISSIntg) :: numberOfGlobalXElements,numberOfGlobalYElements,numberOfGlobalZElements, &
-    & interpolationType,numberOfGaussXi
+    & lagrangeInterpolationType,numberOfGaussXi
   CHARACTER(LEN=255) :: commandArgument,filename
+
+  LOGICAL                               :: directory_exists = .FALSE.
 
   !CMISS variables
   TYPE(cmfe_BasisType) :: LinearBasis
@@ -86,7 +88,7 @@ PROGRAM LAPLACE_EQUATION
   ! my variables to be set!
   
   LOGICAL, PARAMETER              :: useGeneratedMesh = .FALSE. ! FALSE: Manual entries
-  INTEGER(CMISSIntg), PARAMETER :: whichBasis = 2
+  INTEGER(CMISSIntg)   :: whichBasis 
                                    ! For MANUAL mesh, decide if all linear (2), all Hermite (3)
                                    ! or Hermite/linear (1) (cf. Benjamin's example)
                                    ! Generated mesh: only 2 and 3 (NO mix)!!!  
@@ -118,7 +120,7 @@ PROGRAM LAPLACE_EQUATION
 
   ! No input arguments for now, but keep consistent with the example @develop. 
   numberOfArguments = COMMAND_ARGUMENT_COUNT()
-  IF(numberOfArguments >= 4) THEN
+  IF(numberOfArguments >= 5) THEN
     !If we have enough arguments then use the first four for setting up the problem. The subsequent arguments may be used to
     !pass flags to, say, PETSc.
     CALL GET_COMMAND_ARGUMENT(1,commandArgument,argumentLength,status)
@@ -135,14 +137,22 @@ PROGRAM LAPLACE_EQUATION
     IF(numberOfGlobalZElements<0) CALL HandleError("Invalid number of Z elements.")
     CALL GET_COMMAND_ARGUMENT(4,commandArgument,argumentLength,status)
     IF(status>0) CALL HandleError("Error for command argument 4.")
-    READ(commandArgument(1:argumentLength),*) interpolationType
-    IF(interpolationType<=0) CALL HandleError("Invalid Interpolation specification.")
+    READ(commandArgument(1:argumentLength),*) lagrangeInterpolationType
+    IF(lagrangeInterpolationType<=0) CALL HandleError("Invalid Interpolation specification.")
+    CALL GET_COMMAND_ARGUMENT(5,commandArgument,argumentLength,status)
+    IF(status>0) CALL HandleError("Error for command argument 5.")
+    READ(commandArgument(1:argumentLength),*) whichBasis
+    IF(lagrangeInterpolationType<=0) CALL HandleError("Invalid choice of basis.")
   ELSE
     !If there are not enough arguments default the problem specification
     numberOfGlobalXElements=4
     numberOfGlobalYElements=4
     numberOfGlobalZElements=0
-    interpolationType=CMFE_BASIS_LINEAR_LAGRANGE_INTERPOLATION ! i.e. 1
+    ! interpolation type for the Lagrange basis
+    lagrangeInterpolationType=CMFE_BASIS_LINEAR_LAGRANGE_INTERPOLATION ! i.e. 1
+    whichBasis = 2                 ! For MANUAL mesh, decide if all Lagrange (2), all Hermite (3)
+                                   ! or Hermite/Lagrange (1) (cf. Benjamin's example)
+                                   ! Generated mesh: only 2 and 3 (NO mix)!!!  
   ENDIF
 
 
@@ -236,18 +246,19 @@ PROGRAM LAPLACE_EQUATION
   CALL cmfe_Basis_Initialise(LinearBasis,Err)
   CALL cmfe_Basis_CreateStart(LinearBasisUserNumber,LinearBasis,Err)
 
-  SELECT CASE(interpolationType)
+  SELECT CASE(lagrangeInterpolationType)
   CASE(1,2,3,4)
     CALL cmfe_Basis_TypeSet(LinearBasis,CMFE_BASIS_LAGRANGE_HERMITE_TP_TYPE,err)
   CASE(7,8,9)
     CALL cmfe_Basis_TypeSet(LinearBasis,CMFE_BASIS_SIMPLEX_TYPE,err)
+    CALL HandleError("Simplex basis should be checked for this example first!")
   CASE DEFAULT
     CALL HandleError("Invalid interpolation type.")
   END SELECT
-  SELECT CASE(interpolationType)
-  CASE(1) ! lin Lagrange
+  SELECT CASE(lagrangeInterpolationType)
+  CASE(1) ! linear Lagrange
     numberOfGaussXi=2
-  CASE(2) ! quad Lagrange
+  CASE(2) ! quadratic Lagrange
     numberOfGaussXi=3
   CASE(3,4) ! cubic Hermite/Lagrange
     numberOfGaussXi=4
@@ -258,14 +269,15 @@ PROGRAM LAPLACE_EQUATION
   IF(numberOfGlobalZElements==0) THEN
     !Set the basis to be a bi-interpolation basis
     CALL cmfe_Basis_NumberOfXiSet(LinearBasis,2,err)
-    CALL cmfe_Basis_InterpolationXiSet(LinearBasis,[interpolationType,interpolationType],err)
+    CALL cmfe_Basis_InterpolationXiSet(LinearBasis,[lagrangeInterpolationType,lagrangeInterpolationType],err)
     IF(numberOfGaussXi>0) THEN
       CALL cmfe_Basis_QuadratureNumberOfGaussXiSet(LinearBasis,[numberOfGaussXi,numberOfGaussXi],err)
     ENDIF
   ELSE
     !Set the basis to be a tri-interpolation basis
     CALL cmfe_Basis_NumberOfXiSet(LinearBasis,3,err)
-    CALL cmfe_Basis_InterpolationXiSet(LinearBasis,[interpolationType,interpolationType,interpolationType],err)
+    CALL cmfe_Basis_InterpolationXiSet(LinearBasis, &
+      & [lagrangeInterpolationType,lagrangeInterpolationType,lagrangeInterpolationType],err)
     IF(numberOfGaussXi>0) THEN
       CALL cmfe_Basis_QuadratureNumberOfGaussXiSet(LinearBasis,[numberOfGaussXi,numberOfGaussXi,numberOfGaussXi],err)
     ENDIF
@@ -1021,10 +1033,34 @@ PROGRAM LAPLACE_EQUATION
   !-----------------------------------------------------------------------------------------------------------
 
   !Export results
+  ! Set export file name
+  WRITE(filename, "(A29,I1,A1,I1,A1,I1,A2,I1,A1,I1,A1,I1,A2,I1,A3,I1)") & !,A2,I1,A3,I1,A3,I1,A3,I1)") &
+    & "results_current/current_run/l", &
+    & INT(WIDTH),"x",INT(HEIGHT),"x",INT(LENGTH), &
+    & "_n", &
+    & numberOfGlobalXElements,"x",numberOfGlobalYElements,"x",numberOfGlobalZElements, &
+    & "_i",lagrangeInterpolationType, "_np", NumberOfComputationalNodes !,"_s",SolverIsDirect, &
+    !& "_fd",JACOBIAN_FD,"_gm",useGeneratedMesh,"_bc",bcDirichlet
+  ! make sure directories exist
+  INQUIRE(file="./results_current/", exist=directory_exists)
+  IF (.NOT.directory_exists) THEN
+    CALL execute_command_line ("mkdir ./results_current/")
+  END IF
+  INQUIRE(file="./results_current/current_run/", exist=directory_exists)
+  IF (.NOT.directory_exists) THEN
+    CALL execute_command_line ("mkdir ./results_current/current_run/")
+  END IF
+  INQUIRE(file=trim(filename), exist=directory_exists)
+  IF (.NOT.directory_exists) THEN
+    CALL execute_command_line ("mkdir "//trim(filename))
+  END IF
+
+  ! Export solution
   CALL cmfe_Fields_Initialise(Fields,Err)
   CALL cmfe_Fields_Create(Region,Fields,Err)
-  CALL cmfe_Fields_NodesExport(Fields,"laplace_equation","FORTRAN",Err)
-  CALL cmfe_Fields_ElementsExport(Fields,"laplace_equation","FORTRAN",Err)
+  filename=trim(filename)//trim("/laplace_equation")
+  CALL cmfe_Fields_NodesExport(Fields,filename,"FORTRAN",Err)
+  CALL cmfe_Fields_ElementsExport(Fields,filename,"FORTRAN",Err)
   CALL cmfe_Fields_Finalise(Fields,Err)
   
   !Finialise CMISS
