@@ -44,7 +44,7 @@ PROGRAM LAPLACE_EQUATION
   !Program variables
   INTEGER(CMISSIntg) :: RowNo, ColumnNo, GlobalElementNo, GlobalNodeNo, I, J
   INTEGER(CMISSIntg) :: NumberOfElements, NumberOfNodes
-
+  INTEGER(CMISSIntg) :: equationSparsity
   INTEGER(CMISSIntg) :: numberOfArguments,argumentLength,status
   INTEGER(CMISSIntg) :: numberOfGlobalXElements,numberOfGlobalYElements,numberOfGlobalZElements, &
     & lagrangeInterpolationType,numberOfGaussXi
@@ -120,7 +120,7 @@ PROGRAM LAPLACE_EQUATION
 
   ! No input arguments for now, but keep consistent with the example @develop. 
   numberOfArguments = COMMAND_ARGUMENT_COUNT()
-  IF(numberOfArguments >= 5) THEN
+  IF(numberOfArguments >= 6) THEN
     !If we have enough arguments then use the first four for setting up the problem. The subsequent arguments may be used to
     !pass flags to, say, PETSc.
     CALL GET_COMMAND_ARGUMENT(1,commandArgument,argumentLength,status)
@@ -142,7 +142,11 @@ PROGRAM LAPLACE_EQUATION
     CALL GET_COMMAND_ARGUMENT(5,commandArgument,argumentLength,status)
     IF(status>0) CALL HandleError("Error for command argument 5.")
     READ(commandArgument(1:argumentLength),*) whichBasis
-    IF(lagrangeInterpolationType<=0) CALL HandleError("Invalid choice of basis.")
+    IF(whichBasis<=0) CALL HandleError("Invalid choice of basis.")
+    CALL GET_COMMAND_ARGUMENT(6,commandArgument,argumentLength,status)
+    IF(status>0) CALL HandleError("Error for command argument 6.")
+    READ(commandArgument(1:argumentLength),*) equationSparsity
+    IF(equationSparsity<=0 .OR. equationSparsity>=3) CALL HandleError("Invalid choice of sparsity.")
   ELSE
     !If there are not enough arguments default the problem specification
     numberOfGlobalXElements=4
@@ -153,6 +157,8 @@ PROGRAM LAPLACE_EQUATION
     whichBasis = 2                 ! For MANUAL mesh, decide if all Lagrange (2), all Hermite (3)
                                    ! or Hermite/Lagrange (1) (cf. Benjamin's example)
                                    ! Generated mesh: only 2 and 3 (NO mix)!!!  
+    equationSparsity = CMFE_SOLVER_SPARSE_MATRICES ! Sparsity of the EQUATIONS matrix
+    ! CMFE_SOLVER_FULL_MATRICES
   ENDIF
 
 
@@ -916,9 +922,8 @@ PROGRAM LAPLACE_EQUATION
   CALL cmfe_Equations_Initialise(Equations,Err)
   CALL cmfe_EquationsSet_EquationsCreateStart(EquationsSet,Equations,Err)
   !Set the equations matrices sparsity type
-! Try full 4 deludeln correctness?????????????????????????? 
-  CALL cmfe_Equations_SparsityTypeSet(Equations,CMFE_EQUATIONS_SPARSE_MATRICES,Err)
-!  CALL cmfe_Equations_SparsityTypeSet(Equations,CMFE_EQUATIONS_FULL_MATRICES,Err)
+  ! Affects backsubstitution and deludeln output!
+  CALL cmfe_Equations_SparsityTypeSet(Equations,equationSparsity,Err)
   !Set the equations set output
   CALL cmfe_Equations_OutputTypeSet(Equations,CMFE_EQUATIONS_NO_OUTPUT,Err)
 ! CALL cmfe_Equations_OutputTypeSet(Equations,CMFE_EQUATIONS_TIMING_OUTPUT,Err)
@@ -985,8 +990,7 @@ PROGRAM LAPLACE_EQUATION
   CALL cmfe_Problem_SolverGet(Problem,CMFE_CONTROL_LOOP_NODE,1,Solver,Err)
   CALL cmfe_Solver_SolverEquationsGet(Solver,SolverEquations,Err)
   !Set the solver equations sparsity
-  CALL cmfe_SolverEquations_SparsityTypeSet(SolverEquations,CMFE_SOLVER_SPARSE_MATRICES,Err)
-  !CALL cmfe_SolverEquations_SparsityTypeSet(SolverEquations,CMFE_SOLVER_FULL_MATRICES,Err)  
+  CALL cmfe_SolverEquations_SparsityTypeSet(SolverEquations,CMFE_EQUATIONS_SPARSE_MATRICES,Err)
   !Add in the equations set
   CALL cmfe_SolverEquations_EquationsSetAdd(SolverEquations,EquationsSet,EquationsSetIndex,Err)
   !Finish the creation of the problem solver equations
@@ -999,7 +1003,7 @@ PROGRAM LAPLACE_EQUATION
   !Start the creation of the equations set boundary conditions
   CALL cmfe_BoundaryConditions_Initialise(BoundaryConditions,Err)
   CALL cmfe_SolverEquations_BoundaryConditionsCreateStart(SolverEquations,BoundaryConditions,Err)
-  !Set the first node to 0.0 and the last node to 1.0
+  !Set the first node to 0.0 and the last node to 1.0 (X-direction)
   FirstNodeNumber=1
   CALL cmfe_Nodes_Initialise(Nodes,Err)
   CALL cmfe_Region_NodesGet(Region,Nodes,Err)
@@ -1034,12 +1038,13 @@ PROGRAM LAPLACE_EQUATION
 
   !Export results
   ! Set export file name
-  WRITE(filename, "(A29,I1,A1,I1,A1,I1,A2,I1,A1,I1,A1,I1,A2,I1,A3,I1)") & !,A2,I1,A3,I1,A3,I1,A3,I1)") &
+  WRITE(filename, "(A29,I1,A1,I1,A1,I1,A2,I1,A1,I1,A1,I1,A2,I1,A3,I1,A5,I1)") & !,A2,I1,A3,I1,A3,I1,A3,I1)") &
     & "results_current/current_run/l", &
     & INT(WIDTH),"x",INT(HEIGHT),"x",INT(LENGTH), &
     & "_n", &
     & numberOfGlobalXElements,"x",numberOfGlobalYElements,"x",numberOfGlobalZElements, &
-    & "_i",lagrangeInterpolationType, "_np", NumberOfComputationalNodes !,"_s",SolverIsDirect, &
+    & "_i",lagrangeInterpolationType, "_np", NumberOfComputationalNodes, &
+    & "_spar", equationSparsity !,"_s",SolverIsDirect, &
     !& "_fd",JACOBIAN_FD,"_gm",useGeneratedMesh,"_bc",bcDirichlet
   ! make sure directories exist
   INQUIRE(file="./results_current/", exist=directory_exists)
