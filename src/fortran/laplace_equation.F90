@@ -28,7 +28,7 @@ PROGRAM LAPLACE_EQUATION
 
   INTEGER(CMISSIntg), PARAMETER :: CoordinateSystemUserNumber=1
   INTEGER(CMISSIntg), PARAMETER :: RegionUserNumber=2
-  INTEGER(CMISSIntg), PARAMETER :: LinearBasisUserNumber=3
+  INTEGER(CMISSIntg), PARAMETER :: LagrangeBasisUserNumber=3
   INTEGER(CMISSIntg), PARAMETER :: HermiteBasisUserNumber=4
   INTEGER(CMISSIntg), PARAMETER :: MeshUserNumber=6
   INTEGER(CMISSIntg), PARAMETER :: DecompositionUserNumber=7
@@ -44,7 +44,7 @@ PROGRAM LAPLACE_EQUATION
   !Program variables
   INTEGER(CMISSIntg) :: RowNo, ColumnNo, GlobalElementNo, GlobalNodeNo, I, J
   INTEGER(CMISSIntg) :: NumberOfElements, NumberOfNodes
-  INTEGER(CMISSIntg) :: equationSparsity
+  INTEGER(CMISSIntg) :: equationSparsity, solverSparsity
   INTEGER(CMISSIntg) :: numberOfArguments,argumentLength,status
   INTEGER(CMISSIntg) :: numberOfGlobalXElements,numberOfGlobalYElements,numberOfGlobalZElements, &
     & lagrangeInterpolationType,numberOfGaussXi
@@ -53,7 +53,7 @@ PROGRAM LAPLACE_EQUATION
   LOGICAL                               :: directory_exists = .FALSE.
 
   !CMISS variables
-  TYPE(cmfe_BasisType) :: LinearBasis
+  TYPE(cmfe_BasisType) :: LagrangeBasis
   TYPE(cmfe_BasisType) :: HermiteBasis
   TYPE(cmfe_BoundaryConditionsType) :: BoundaryConditions
   TYPE(cmfe_CoordinateSystemType) :: CoordinateSystem,WorldCoordinateSystem
@@ -85,20 +85,18 @@ PROGRAM LAPLACE_EQUATION
   INTEGER(CMISSIntg) :: Err
   LOGICAL :: SetDecompositionDistributed
   
-  ! my variables to be set!
+  ! my variables
   
-  LOGICAL, PARAMETER              :: useGeneratedMesh = .FALSE. ! FALSE: Manual entries
+  LOGICAL              :: useGeneratedMesh ! FALSE: User-defined mesh
   INTEGER(CMISSIntg)   :: whichBasis 
                                    ! For MANUAL mesh, decide if all linear (2), all Hermite (3)
                                    ! or Hermite/linear (1) (cf. Benjamin's example)
                                    ! Generated mesh: only 2 and 3 (NO mix)!!!  
-  INTEGER(CMISSIntg), PARAMETER :: numberOfComponents = 2 ! Geometric Field components:
-                                                          ! ndim components nodal +1 element-based +1 constant
-                                                          ! NO solve for element-based and constant!
+  INTEGER(CMISSIntg) :: numberOfComponents    ! Geometric Field components:
   ! my variables 
   INTEGER(CMISSIntg) :: count_components = 1
   INTEGER(CMISSIntg) :: domain, localNodesNumber, derivativeNumber
-  INTEGER(CMISSIntg), ALLOCATABLE :: elementUserNodes(:), hermiteNodes(:), linearNodes(:)
+  INTEGER(CMISSIntg), ALLOCATABLE :: elementUserNodes(:), hermiteNodes(:)
   LOGICAL, ALLOCATABLE :: trackNodes(:)
   LOGICAL :: updateDerivativeForNode
   CHARACTER(LEN=60) :: diagFilename
@@ -120,7 +118,7 @@ PROGRAM LAPLACE_EQUATION
 
   ! No input arguments for now, but keep consistent with the example @develop. 
   numberOfArguments = COMMAND_ARGUMENT_COUNT()
-  IF(numberOfArguments >= 6) THEN
+  IF(numberOfArguments >= 8) THEN
     !If we have enough arguments then use the first four for setting up the problem. The subsequent arguments may be used to
     !pass flags to, say, PETSc.
     CALL GET_COMMAND_ARGUMENT(1,commandArgument,argumentLength,status)
@@ -146,20 +144,29 @@ PROGRAM LAPLACE_EQUATION
     CALL GET_COMMAND_ARGUMENT(6,commandArgument,argumentLength,status)
     IF(status>0) CALL HandleError("Error for command argument 6.")
     READ(commandArgument(1:argumentLength),*) equationSparsity
-    IF(equationSparsity<=0 .OR. equationSparsity>=3) CALL HandleError("Invalid choice of sparsity.")
+    IF(equationSparsity<=0 .OR. equationSparsity>=3) CALL HandleError("Invalid choice of eq. sparsity.")
+    CALL GET_COMMAND_ARGUMENT(7,commandArgument,argumentLength,status)
+    IF(status>0) CALL HandleError("Error for command argument 6.")
+    READ(commandArgument(1:argumentLength),*) solverSparsity
+    IF(solverSparsity<=0 .OR. solverSparsity>=3) CALL HandleError("Invalid choice of solver sparsity.")
+    CALL GET_COMMAND_ARGUMENT(8,commandArgument,argumentLength,status)
+    IF(status>0) CALL HandleError("Error for command argument 8.")
+    READ(commandArgument(1:argumentLength),*) useGeneratedMesh
   ELSE
     !If there are not enough arguments default the problem specification
-    numberOfGlobalXElements=4
-    numberOfGlobalYElements=4
-    numberOfGlobalZElements=0
+    numberOfGlobalXElements=4!2!
+    numberOfGlobalYElements=4!1!
+    numberOfGlobalZElements=0!1!
     ! interpolation type for the Lagrange basis
-    lagrangeInterpolationType=CMFE_BASIS_LINEAR_LAGRANGE_INTERPOLATION ! i.e. 1
+    lagrangeInterpolationType = CMFE_BASIS_LINEAR_LAGRANGE_INTERPOLATION ! i.e. 1
     whichBasis = 2                 ! For MANUAL mesh, decide if all Lagrange (2), all Hermite (3)
                                    ! or Hermite/Lagrange (1) (cf. Benjamin's example)
                                    ! Generated mesh: only 2 and 3 (NO mix)!!!  
-    equationSparsity = CMFE_SOLVER_SPARSE_MATRICES ! Sparsity of the EQUATIONS matrix
+    equationSparsity = CMFE_EQUATIONS_FULL_MATRICES ! Sparsity of the EQUATIONS matrix
+    solverSparsity   = CMFE_SOLVER_SPARSE_MATRICES ! Sparsity of the SOLVER matrix
     ! CMFE_SOLVER_FULL_MATRICES
-  ENDIF
+    useGeneratedMesh = .TRUE. ! Manual mesh only for 2D case, see picture in doc
+  END IF
 
 
   !Intialise OpenCMISS
@@ -195,13 +202,21 @@ PROGRAM LAPLACE_EQUATION
   !CASE DEFAULT
   !  diagFilename = "Diag_other"
   !END SELECT
-  diagFilename = "Diagnostics"
+  diagFilename = "Diagnostics" !Develop"
+
+  ! Do this to get name of branch and specify diagnostic name...???
+  !CALL EXECUTE_COMMAND_LINE("cd ~/software/opencmiss/opencmiss/src/iron/")
+  !CALL EXECUTE_COMMAND_LINE("git branch | grep \* | cut -d ' ' -f2")
+  !CALL EXECUTE_COMMAND_LINE("cd ~/Desktop/functional_tests/examples_build/laplace_equation/laplace_equation-build/")
 
   CALL cmfe_DiagnosticsSetOn(CMFE_IN_DIAG_TYPE,[1,2,3],TRIM(diagFileName),&
-    & ["DOMAIN_MAPPINGS_NODES_CALCULATE", &
-    &  "DOMAIN_MAPPINGS_INITIALISE     "], Err)
+    & ["DOMAIN_MAPPINGS_NODES_CALCULATE       ", &
+    &  "DOMAIN_MAPPINGS_INITIALISE            ", &
+!    &  "DECOMPOSITION_TOPOLOGY_LINES_CALCULATE", &
+!    &  "DECOMPOSITION_TOPOLOGY_FACES_CALCULATE"], Err)
 !    &  "FIELD_MAPPINGS_CALCULATE       "],Err)
-  
+     & "SOLVER_MATRIX_STRUCTURE_CALCULATE     ", &
+     & "SOLVER_MAPPING_CALCULATE              "], Err)
   
   !CALL cmfe_OutputSetOn("diagnostics.txt",Err)
 
@@ -226,7 +241,7 @@ PROGRAM LAPLACE_EQUATION
   ELSE
     !Set the coordinate system to be 3D
     CALL cmfe_CoordinateSystem_DimensionSet(coordinateSystem,3,err)
-  ENDIF
+  END IF
 
   !Finish the creation of the coordinate system
   CALL cmfe_CoordinateSystem_CreateFinish(CoordinateSystem,Err)
@@ -249,14 +264,14 @@ PROGRAM LAPLACE_EQUATION
   !-----------------------------------------------------------------------------------------------------------
 
   !Create linear basis
-  CALL cmfe_Basis_Initialise(LinearBasis,Err)
-  CALL cmfe_Basis_CreateStart(LinearBasisUserNumber,LinearBasis,Err)
+  CALL cmfe_Basis_Initialise(LagrangeBasis,Err)
+  CALL cmfe_Basis_CreateStart(LagrangeBasisUserNumber,LagrangeBasis,Err)
 
   SELECT CASE(lagrangeInterpolationType)
   CASE(1,2,3,4)
-    CALL cmfe_Basis_TypeSet(LinearBasis,CMFE_BASIS_LAGRANGE_HERMITE_TP_TYPE,err)
+    CALL cmfe_Basis_TypeSet(LagrangeBasis,CMFE_BASIS_LAGRANGE_HERMITE_TP_TYPE,err)
   CASE(7,8,9)
-    CALL cmfe_Basis_TypeSet(LinearBasis,CMFE_BASIS_SIMPLEX_TYPE,err)
+    CALL cmfe_Basis_TypeSet(LagrangeBasis,CMFE_BASIS_SIMPLEX_TYPE,err)
     CALL HandleError("Simplex basis should be checked for this example first!")
   CASE DEFAULT
     CALL HandleError("Invalid interpolation type.")
@@ -274,27 +289,27 @@ PROGRAM LAPLACE_EQUATION
 
   IF(numberOfGlobalZElements==0) THEN
     !Set the basis to be a bi-interpolation basis
-    CALL cmfe_Basis_NumberOfXiSet(LinearBasis,2,err)
-    CALL cmfe_Basis_InterpolationXiSet(LinearBasis,[lagrangeInterpolationType,lagrangeInterpolationType],err)
+    CALL cmfe_Basis_NumberOfXiSet(LagrangeBasis,2,err)
+    CALL cmfe_Basis_InterpolationXiSet(LagrangeBasis,[lagrangeInterpolationType,lagrangeInterpolationType],err)
     IF(numberOfGaussXi>0) THEN
-      CALL cmfe_Basis_QuadratureNumberOfGaussXiSet(LinearBasis,[numberOfGaussXi,numberOfGaussXi],err)
-    ENDIF
+      CALL cmfe_Basis_QuadratureNumberOfGaussXiSet(LagrangeBasis,[numberOfGaussXi,numberOfGaussXi],err)
+    END IF
   ELSE
     !Set the basis to be a tri-interpolation basis
-    CALL cmfe_Basis_NumberOfXiSet(LinearBasis,3,err)
-    CALL cmfe_Basis_InterpolationXiSet(LinearBasis, &
+    CALL cmfe_Basis_NumberOfXiSet(LagrangeBasis,3,err)
+    CALL cmfe_Basis_InterpolationXiSet(LagrangeBasis, &
       & [lagrangeInterpolationType,lagrangeInterpolationType,lagrangeInterpolationType],err)
     IF(numberOfGaussXi>0) THEN
-      CALL cmfe_Basis_QuadratureNumberOfGaussXiSet(LinearBasis,[numberOfGaussXi,numberOfGaussXi,numberOfGaussXi],err)
-    ENDIF
-  ENDIF
+      CALL cmfe_Basis_QuadratureNumberOfGaussXiSet(LagrangeBasis,[numberOfGaussXi,numberOfGaussXi,numberOfGaussXi],err)
+    END IF
+  END IF
 
-  !CALL cmfe_Basis_NumberOfXiSet(LinearBasis,2,Err)
-  !CALL cmfe_Basis_InterpolationXiSet(LinearBasis,&
+  !CALL cmfe_Basis_NumberOfXiSet(LagrangeBasis,2,Err)
+  !CALL cmfe_Basis_InterpolationXiSet(LagrangeBasis,&
   !  & [CMFE_BASIS_LINEAR_LAGRANGE_INTERPOLATION,CMFE_BASIS_LINEAR_LAGRANGE_INTERPOLATION],Err) !i.e. 1
-  !CALL cmfe_Basis_QuadratureNumberOfGaussXiSet(LinearBasis,[2,2],Err)
+  !CALL cmfe_Basis_QuadratureNumberOfGaussXiSet(LagrangeBasis,[2,2],Err)
   
-  CALL cmfe_Basis_CreateFinish(LinearBasis,Err)
+  CALL cmfe_Basis_CreateFinish(LagrangeBasis,Err)
   
   !Create hermite basis
   CALL cmfe_Basis_Initialise(HermiteBasis,Err)
@@ -308,7 +323,7 @@ PROGRAM LAPLACE_EQUATION
       & [CMFE_BASIS_CUBIC_HERMITE_INTERPOLATION,CMFE_BASIS_CUBIC_HERMITE_INTERPOLATION],err)
     IF(numberOfGaussXi>0) THEN
       CALL cmfe_Basis_QuadratureNumberOfGaussXiSet(HermiteBasis,[4,4],err)
-    ENDIF
+    END IF
   ELSE
     !CALL HandleError("No Hermite basis defined for 3D case.")
     !Set the basis to be a tri-interpolation basis
@@ -317,8 +332,8 @@ PROGRAM LAPLACE_EQUATION
       & CMFE_BASIS_CUBIC_HERMITE_INTERPOLATION,CMFE_BASIS_CUBIC_HERMITE_INTERPOLATION],err)
     IF(numberOfGaussXi>0) THEN
       CALL cmfe_Basis_QuadratureNumberOfGaussXiSet(HermiteBasis,[4,4,4],err)
-    ENDIF
-  ENDIF
+    END IF
+  END IF
  
   CALL cmfe_Basis_CreateFinish(HermiteBasis,Err)
 
@@ -328,7 +343,7 @@ PROGRAM LAPLACE_EQUATION
 
   !Start the creation of a generated mesh in the region
   IF (useGeneratedMesh) THEN
-
+    WRITE(*,*) "Using a generated mesh"
     CALL cmfe_GeneratedMesh_Initialise(generatedMesh,err)
     CALL cmfe_GeneratedMesh_CreateStart(GeneratedMeshUserNumber,Region,generatedMesh,err)
     !Set up a regular x*y*z mesh
@@ -337,11 +352,11 @@ PROGRAM LAPLACE_EQUATION
     !Using different basis types is not supported for generated meshes! ==> ALL LINEAR/HERMITE!!!
     SELECT CASE (whichBasis)
     CASE (2)
-      CALL cmfe_GeneratedMesh_BasisSet(generatedMesh,LinearBasis,err) 
+      CALL cmfe_GeneratedMesh_BasisSet(generatedMesh,LagrangeBasis,err) 
     CASE (3)
       CALL cmfe_GeneratedMesh_BasisSet(generatedMesh,HermiteBasis,err) 
     CASE DEFAULT
-      CALL HandleError("Wrong choice of basis for generated mesh!")
+      CALL HandleError("Mixed basis not possible for generated mesh!")
     END SELECT
 
     !Define the mesh on the region
@@ -354,7 +369,7 @@ PROGRAM LAPLACE_EQUATION
       CALL cmfe_GeneratedMesh_NumberOfElementsSet(generatedMesh,[numberOfGlobalXElements,numberOfGlobalYElements, &
         & numberOfGlobalZElements],err)
       NumberOfElements = numberOfGlobalXElements*numberOfGlobalYElements*numberOfGlobalZElements
-    ENDIF
+    END IF
     !Finish the creation of a generated mesh in the region
     CALL cmfe_Mesh_Initialise(Mesh,err)
     CALL cmfe_GeneratedMesh_CreateFinish(generatedMesh,MeshUserNumber,Mesh,err)
@@ -372,6 +387,7 @@ PROGRAM LAPLACE_EQUATION
       CALL cmfe_Mesh_CreateStart(MeshUserNumber,Region,2,Mesh,Err) ! 2 is number of dim
     ELSE
       CALL cmfe_Mesh_CreateStart(MeshUserNumber,Region,3,Mesh,Err) ! 3 is number of dim
+      CALL HandleError("User-defined mesh only 2D!")
     END IF
     CALL cmfe_Mesh_NumberOfComponentsSet(Mesh,1,Err)
 
@@ -383,7 +399,7 @@ PROGRAM LAPLACE_EQUATION
   
     ! Create elements 
     CALL cmfe_MeshElements_Initialise(MeshElements,Err)
-    CALL cmfe_MeshElements_CreateStart(Mesh,1,LinearBasis,MeshElements,Err)
+    CALL cmfe_MeshElements_CreateStart(Mesh,1,LagrangeBasis,MeshElements,Err)
 
     PRINT *, "Basis set start!"
     ! Set the basis
@@ -396,27 +412,26 @@ PROGRAM LAPLACE_EQUATION
           CALL cmfe_MeshElements_BasisSet(MeshElements,GlobalElementNo,HermiteBasis,Err)
         END DO
         DO GlobalElementNo=5,12
-          CALL cmfe_MeshElements_BasisSet(MeshElements,GlobalElementNo,LinearBasis,Err)
-        ENDDO
+          CALL cmfe_MeshElements_BasisSet(MeshElements,GlobalElementNo,LagrangeBasis,Err)
+        END DO
         DO GlobalElementNo=13,16
           CALL cmfe_MeshElements_BasisSet(MeshElements,GlobalElementNo,HermiteBasis,Err)
         END DO
       CASE (3)
-        CALL cmfe_MeshElements_BasisSet(MeshElements,1,LinearBasis,Err)
+        CALL cmfe_MeshElements_BasisSet(MeshElements,1,LagrangeBasis,Err)
         CALL cmfe_MeshElements_BasisSet(MeshElements,2,HermiteBasis,Err)
-        CALL cmfe_MeshElements_BasisSet(MeshElements,3,LinearBasis,Err)
+        CALL cmfe_MeshElements_BasisSet(MeshElements,3,LagrangeBasis,Err)
       CASE DEFAULT
         CALL HandleError("Number of elements not supported for user-defined mesh!!!") 
       END SELECT        
-
     CASE(2) ! all linear
       DO GlobalElementNo=1,NumberOfElements
-        CALL cmfe_MeshElements_BasisSet(MeshElements,GlobalElementNo,LinearBasis,Err)
-      ENDDO
+        CALL cmfe_MeshElements_BasisSet(MeshElements,GlobalElementNo,LagrangeBasis,Err)
+      END DO
     CASE(3) ! all Hermite
       DO GlobalElementNo=1,NumberOfElements
         CALL cmfe_MeshElements_BasisSet(MeshElements,GlobalElementNo,HermiteBasis,Err)
-      ENDDO
+      END DO
     CASE DEFAULT
       CALL HandleError("Basis choice not supported!!!")
     END SELECT
@@ -441,9 +456,9 @@ PROGRAM LAPLACE_EQUATION
       CALL cmfe_MeshElements_NodesSet(MeshElements, 2, [2,3,6,7], Err)
       CALL cmfe_MeshElements_NodesSet(MeshElements, 3, [3,4,7,8], Err)
       ! Moved up
-      !CALL cmfe_MeshElements_BasisSet(MeshElements,1,LinearBasis,Err)
+      !CALL cmfe_MeshElements_BasisSet(MeshElements,1,LagrangeBasis,Err)
       !CALL cmfe_MeshElements_BasisSet(MeshElements,2,HermiteBasis,Err)
-      !CALL cmfe_MeshElements_BasisSet(MeshElements,3,LinearBasis,Err)
+      !CALL cmfe_MeshElements_BasisSet(MeshElements,3,LagrangeBasis,Err)
     ELSE
 
       ! Distribute nodes among elements (cf. picture)
@@ -473,8 +488,6 @@ PROGRAM LAPLACE_EQUATION
     IF (whichBasis==1) THEN
       ALLOCATE(hermiteNodes(0), stat=err)
       IF(err/=0) CALL HandleError("Could not allocate array of Hermite elements.")
-      ALLOCATE(linearNodes(0), stat=err)
-      IF(err/=0) CALL HandleError("Could not allocate array of linear elements.")
       ALLOCATE(elementUserNodes(4),STAT=Err)
       IF(ERR/=0) CALL HandleError("Could not allocate nodes on element array.")
       SELECT CASE (numberOfElements) 
@@ -483,21 +496,13 @@ PROGRAM LAPLACE_EQUATION
           CALL cmfe_MeshElements_NodesGet(MeshElements,GlobalElementNo,elementUserNodes,Err)
           hermiteNodes = [hermiteNodes,elementUserNodes]
         END DO
-      !DO GlobalElementNo=5,12
-        !CALL cmfe_MeshElements_NodesGet(MeshElements,GlobalElementNo,elementUserNodes,Err)
-        !linearNodes = [linearNodes,elementUserNodes]
-      !ENDDO
         DO GlobalElementNo=13,16
           CALL cmfe_MeshElements_NodesGet(MeshElements,GlobalElementNo,elementUserNodes,Err)
           hermiteNodes = [hermiteNodes,elementUserNodes]
         END DO
       CASE (3)
-        !CALL cmfe_MeshElements_NodesGet(MeshElements,1,elementUserNodes,Err)
-        !linearNodes = [linearNodes,elementUserNodes]
         CALL cmfe_MeshElements_NodesGet(MeshElements,2,elementUserNodes,Err)
         hermiteNodes = [hermiteNodes,elementUserNodes]
-        !CALL cmfe_MeshElements_NodesGet(MeshElements,3,elementUserNodes,Err)
-        !linearNodes = [linearNodes,elementUserNodes]
       CASE DEFAULT
         CALL HandleError("Number of elements not supported for user-defined mesh!!!") 
       END SELECT        
@@ -525,8 +530,8 @@ PROGRAM LAPLACE_EQUATION
           PRINT *, GlobalElementNo
           PRINT *, "Nodes"
           PRINT *, elementUserNodes          
-        ENDDO
-      ENDDO
+        END DO
+      END DO
     CASE (3)
       DO GlobalElementNo = 1,3
         ! Check with nodes get
@@ -540,23 +545,6 @@ PROGRAM LAPLACE_EQUATION
       CALL HandleError("Invalid number of X-nodes for this example!")
     END SELECT
   END IF 
-  
-
-  !Create a decomposition
-  CALL cmfe_Decomposition_Initialise(Decomposition,Err)
-  CALL cmfe_Decomposition_CreateStart(DecompositionUserNumber,Mesh,Decomposition,Err)
-  ! Set the decomposition to be a general decomposition with the specified number of domains
-
-  ! Standard (old) decomposition
-  ! No need
-  !CALL cmfe_Decomposition_TypeSet(decomposition,CMFE_DECOMPOSITION_CALCULATED_TYPE,err)
-  !CALL cmfe_Decomposition_NumberOfDomainsSet(Decomposition,NumberOfComputationalNodes,Err)
-
-  ! User-defined decomposition
-  CALL cmfe_Decomposition_TypeSet(Decomposition,CMFE_DECOMPOSITION_USER_DEFINED_TYPE,Err)
-  
-  CALL cmfe_Decomposition_NumberOfDomainsSet(Decomposition,NumberOfComputationalNodes,Err)
-  
   ! global element numbers
   !13 14 15 16
   ! 9 10 11 12
@@ -565,70 +553,98 @@ PROGRAM LAPLACE_EQUATION
   
   ! OR (-np 3)
   ! 1 2 3
- 
+  
+  !Create a decomposition
+  CALL cmfe_Decomposition_Initialise(Decomposition,Err)
+  CALL cmfe_Decomposition_CreateStart(DecompositionUserNumber,Mesh,Decomposition,Err)
+  ! Set the decomposition to be a general decomposition with the specified number of domains
+
+  ! User-defined decomposition
+  CALL cmfe_Decomposition_TypeSet(Decomposition,CMFE_DECOMPOSITION_USER_DEFINED_TYPE,Err)
+  ! Automatic decomposition
+  !CALL cmfe_Decomposition_TypeSet(decomposition,CMFE_DECOMPOSITION_CALCULATED_TYPE,err)
+  CALL cmfe_Decomposition_NumberOfDomainsSet(Decomposition,NumberOfComputationalNodes,Err)
+   
   SetDecompositionDistributed = .FALSE. ! True only works with new implementation, false works with both.
                                         ! Affects decomposition for 4 nodes (below).
                                         ! NOT SURE WHAT IT MEANS THOUGH!!!!!!!!!!
-  SELECT CASE (NumberOfComputationalNodes)
-  CASE (1)
-    DO I=1,NumberOfElements
-      ! All nodes to the same rank
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,I,0,Err)
-    ENDDO
-  CASE (2)
-    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,1,0,Err)
-    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,2,0,Err)
-    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,5,0,Err)
-    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,6,0,Err)
-    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,9,0,Err)
-    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,10,0,Err)
-    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,13,0,Err)
-    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,14,0,Err)
-    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,3,1,Err)
-    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,4,1,Err)
-    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,7,1,Err)
-    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,8,1,Err)
-    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,11,1,Err)
-    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,12,1,Err)
-    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,15,1,Err)
-    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,16,1,Err)
-  CASE (3)
-    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,1,0,Err)
-    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,2,1,Err)
-    CALL cmfe_Decomposition_ElementDomainSet(Decomposition,3,2,Err)
-  CASE (4)
-    IF (ComputationalNodeNumber == 0 .OR..NOT.SetDecompositionDistributed) THEN
-      !                                             global el., domain
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,9,2,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,5,0,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,14,2,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,11,3,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,6,0,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,16,3,Err)
-    ENDIF
-    
-    IF (ComputationalNodeNumber == 1 .OR..NOT.SetDecompositionDistributed) THEN
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,7,0,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,15,3,Err)
+
+  IF (numberOfGlobalZElements >=1) THEN
+    ! 3D, max -np 2 for 2 elements
+    SELECT CASE (NumberOfComputationalNodes)
+    CASE (1)
+      DO I=1,NumberOfElements
+        ! All nodes to the same rank
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,I,0,Err)
+      END DO
+    CASE (2)
       CALL cmfe_Decomposition_ElementDomainSet(Decomposition,1,0,Err)
-    ENDIF
-    
-    IF (ComputationalNodeNumber == 2 .OR..NOT.SetDecompositionDistributed) THEN
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,10,2,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,8,1,Err)
-    ENDIF
-    
-    IF (ComputationalNodeNumber == 3 .OR..NOT.SetDecompositionDistributed) THEN
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,2,1,Err)
+    CASE DEFAULT
+      CALL HandleError("3D case supported for max 2 ranks!!!")      
+    END SELECT
+  ELSE
+    ! 2D case
+    SELECT CASE (NumberOfComputationalNodes)
+    CASE (1)
+      DO I=1,NumberOfElements
+        ! All nodes to the same rank
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,I,0,Err)
+      END DO
+    CASE (2)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,1,0,Err)
       CALL cmfe_Decomposition_ElementDomainSet(Decomposition,2,0,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,5,0,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,6,0,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,9,0,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,10,0,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,13,0,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,14,0,Err)
       CALL cmfe_Decomposition_ElementDomainSet(Decomposition,3,1,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,12,3,Err)
       CALL cmfe_Decomposition_ElementDomainSet(Decomposition,4,1,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,13,2,Err)
-    ENDIF
-  CASE DEFAULT
-    CALL HandleError("Number of nodes NOT supported (max 4)!!!")
-  END SELECT
-  
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,7,1,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,8,1,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,11,1,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,12,1,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,15,1,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,16,1,Err)
+    CASE (3)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,1,0,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,2,1,Err)
+      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,3,2,Err)
+    CASE (4)
+      IF (ComputationalNodeNumber == 0 .OR..NOT.SetDecompositionDistributed) THEN
+      !                                             global el., domain
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,9,2,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,5,0,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,14,2,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,11,3,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,6,0,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,16,3,Err)
+      END IF
+    
+      IF (ComputationalNodeNumber == 1 .OR..NOT.SetDecompositionDistributed) THEN
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,7,0,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,15,3,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,1,0,Err)
+      END IF
+    
+      IF (ComputationalNodeNumber == 2 .OR..NOT.SetDecompositionDistributed) THEN
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,10,2,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,8,1,Err)
+      END IF
+    
+      IF (ComputationalNodeNumber == 3 .OR..NOT.SetDecompositionDistributed) THEN
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,2,0,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,3,1,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,12,3,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,4,1,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,13,2,Err)
+      END IF
+    CASE DEFAULT
+      CALL HandleError("Number of nodes NOT supported (max 4)!!!")
+    END SELECT
+  END IF ! number of dimensions 
   !Finish the decomposition
   CALL cmfe_Decomposition_CreateFinish(Decomposition,Err)
  
@@ -653,7 +669,12 @@ PROGRAM LAPLACE_EQUATION
   CALL cmfe_Field_MeshDecompositionSet(GeometricField,Decomposition,Err)
   !Set the domain to be used by the field components.
  
-  !!CALL cmfe_Field_NumberOfComponentsSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,7,Err)
+  ! Components of the geometric field
+  ! ndim components nodal-based
+  numberOfComponents = 2
+  IF(numberOfGlobalZElements/=0) numberOfComponents = numberOfComponents+1
+  ! Option: add 1 element-based +1 constant but NO solve if these components added!
+  ! Just for decomposition test purposes!!
 
   !1 vbl, components: 2(3)x Mesh (node-dofs), 1 x Element-based, 1 x constant 
   CALL cmfe_Field_NumberOfComponentsSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,numberOfComponents,Err)
@@ -668,7 +689,7 @@ PROGRAM LAPLACE_EQUATION
   IF(numberOfGlobalZElements/=0) THEN
     count_components = count_components +1
     CALL cmfe_Field_ComponentMeshComponentSet(geometricField,CMFE_FIELD_U_VARIABLE_TYPE,count_components,1,err)
-  ENDIF
+  END IF
 
   ! other interpolations
   IF (count_components < numberOfComponents) THEN
@@ -681,9 +702,13 @@ PROGRAM LAPLACE_EQUATION
     CALL cmfe_Field_ComponentInterpolationSet &  
       & (GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,count_components,CMFE_FIELD_CONSTANT_INTERPOLATION,Err)
   END IF
+
   !!CALL cmfe_Field_ComponentInterpolationSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,5,CMFE_FIELD_NODE_BASED_INTERPOLATION,Err)
   !!CALL cmfe_Field_ComponentInterpolationSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,6,CMFE_FIELD_CONSTANT_INTERPOLATION,Err)
   !!CALL cmfe_Field_ComponentInterpolationSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,7,CMFE_FIELD_ELEMENT_BASED_INTERPOLATION,Err)
+
+  WRITE (*,*) "Created geometric field components"
+  WRITE (*,*) count_components
   
   !Finish creating the field
   CALL cmfe_Field_CreateFinish(GeometricField,Err)
@@ -927,7 +952,8 @@ PROGRAM LAPLACE_EQUATION
   !Set the equations set output
   CALL cmfe_Equations_OutputTypeSet(Equations,CMFE_EQUATIONS_NO_OUTPUT,Err)
 ! CALL cmfe_Equations_OutputTypeSet(Equations,CMFE_EQUATIONS_TIMING_OUTPUT,Err)
-  CALL cmfe_Equations_OutputTypeSet(Equations,CMFE_EQUATIONS_MATRIX_OUTPUT,Err)
+  IF(ComputationalNodeNumber==1) &
+    & CALL cmfe_Equations_OutputTypeSet(Equations,CMFE_EQUATIONS_MATRIX_OUTPUT,Err)
 ! CALL cmfe_Equations_OutputTypeSet(Equations,CMFE_EQUATIONS_ELEMENT_MATRIX_OUTPUT,Err)
   !Finish the equations set equations
   CALL cmfe_EquationsSet_EquationsCreateFinish(EquationsSet,Err)
@@ -960,17 +986,21 @@ PROGRAM LAPLACE_EQUATION
 ! CALL cmfe_Solver_OutputTypeSet(Solver,CMFE_SOLVER_PROGRESS_OUTPUT,Err)
 ! CALL cmfe_Solver_OutputTypeSet(Solver,CMFE_SOLVER_TIMING_OUTPUT,Err)
 ! CALL cmfe_Solver_OutputTypeSet(Solver,CMFE_SOLVER_SOLVER_OUTPUT,Err)
-  CALL cmfe_Solver_OutputTypeSet(Solver,CMFE_SOLVER_MATRIX_OUTPUT,Err)
+! CALL cmfe_Solver_OutputTypeSet(Solver,CMFE_SOLVER_MATRIX_OUTPUT,Err)
   
-! CALL cmfe_Solver_LinearTypeSet(Solver,CMFE_SOLVER_LINEAR_ITERATIVE_SOLVE_TYPE,Err)
-! CALL cmfe_Solver_LinearIterativeAbsoluteToleranceSet(Solver,1.0E-12_CMISSRP,Err)
-! CALL cmfe_Solver_LinearIterativeRelativeToleranceSet(Solver,1.0E-12_CMISSRP,Err)
+  CALL cmfe_Solver_LinearTypeSet(Solver,CMFE_SOLVER_LINEAR_ITERATIVE_SOLVE_TYPE,Err)
+  CALL cmfe_Solver_LinearIterativeAbsoluteToleranceSet(Solver,1.0E-12_CMISSRP,Err)
+  CALL cmfe_Solver_LinearIterativeRelativeToleranceSet(Solver,1.0E-12_CMISSRP,Err)
 
-! CASE SPARSE
-  CALL cmfe_Solver_LinearTypeSet(Solver,CMFE_SOLVER_LINEAR_DIRECT_SOLVE_TYPE,Err)
-  
-! CALL cmfe_Solver_LinearTypeSet(Solver,CMFE_SOLVER_LINEAR_DIRECT_SOLVE_TYPE,Err)
+!  CASE FULL
+!  CALL cmfe_Solver_LinearTypeSet(Solver,CMFE_SOLVER_LINEAR_ITERATIVE_SOLVE_TYPE,Err)
+!  CASE SPARSE
+!  CALL cmfe_Solver_LinearTypeSet(Solver,CMFE_SOLVER_LINEAR_DIRECT_SOLVE_TYPE,Err)
+
+! Do not select any for now
+! CASE SPARSE  
 ! CALL cmfe_Solver_LibraryTypeSet(Solver,CMFE_SOLVER_MUMPS_LIBRARY,Err)
+
 ! CASE FULL 
 ! CALL cmfe_Solver_LibraryTypeSet(Solver,CMFE_SOLVER_LAPACK_LIBRARY,Err)
 ! CALL cmfe_Solver_LibraryTypeSet(Solver,CMFE_SOLVER_SUPERLU_LIBRARY,Err)
@@ -990,7 +1020,7 @@ PROGRAM LAPLACE_EQUATION
   CALL cmfe_Problem_SolverGet(Problem,CMFE_CONTROL_LOOP_NODE,1,Solver,Err)
   CALL cmfe_Solver_SolverEquationsGet(Solver,SolverEquations,Err)
   !Set the solver equations sparsity
-  CALL cmfe_SolverEquations_SparsityTypeSet(SolverEquations,CMFE_EQUATIONS_SPARSE_MATRICES,Err)
+  CALL cmfe_SolverEquations_SparsityTypeSet(SolverEquations,solverSparsity,Err)
   !Add in the equations set
   CALL cmfe_SolverEquations_EquationsSetAdd(SolverEquations,EquationsSet,EquationsSetIndex,Err)
   !Finish the creation of the problem solver equations
@@ -1015,13 +1045,13 @@ PROGRAM LAPLACE_EQUATION
       & CMFE_BOUNDARY_CONDITION_FIXED,0.0_CMISSRP,Err)
     !CALL cmfe_BoundaryConditions_AddNode(BoundaryConditions,DependentField,CMFE_FIELD_U_VARIABLE_TYPE,1,1,FirstNodeNumber,1, &
     !  & CMFE_BOUNDARY_CONDITION_FIXED,0.0_CMISSRP,Err)
-  ENDIF
+  END IF
   IF(LastNodeDomain==ComputationalNodeNumber) THEN
     CALL cmfe_BoundaryConditions_SetNode(BoundaryConditions,DependentField,CMFE_FIELD_U_VARIABLE_TYPE,1,1,LastNodeNumber,1, &
       & CMFE_BOUNDARY_CONDITION_FIXED,1.0_CMISSRP,Err)
     !CALL cmfe_BoundaryConditions_AddNode(BoundaryConditions,DependentField,CMFE_FIELD_U_VARIABLE_TYPE,1,1,LastNodeNumber,1, &
     !  & CMFE_BOUNDARY_CONDITION_FIXED,1.0_CMISSRP,Err)
-  ENDIF
+  END IF
   !Finish the creation of the equations set boundary conditions
   CALL cmfe_SolverEquations_BoundaryConditionsCreateFinish(SolverEquations,Err)
 
@@ -1029,22 +1059,23 @@ PROGRAM LAPLACE_EQUATION
   !SOLVE
   !-----------------------------------------------------------------------------------------------------------
 
+  !WRITE(*,*) "Stop program in laplace_equation.F90 before cmfe_Problem_Solve"
+  !STOP
   !Solve the problem
   CALL cmfe_Problem_Solve(Problem,Err)
-
   !-----------------------------------------------------------------------------------------------------------
   !OUTPUT
   !-----------------------------------------------------------------------------------------------------------
-
   !Export results
   ! Set export file name
-  WRITE(filename, "(A29,I1,A1,I1,A1,I1,A2,I1,A1,I1,A1,I1,A2,I1,A3,I1,A5,I1)") & !,A2,I1,A3,I1,A3,I1,A3,I1)") &
+  WRITE(filename, "(A29,I1,A1,I1,A1,I1,A2,I1,A1,I1,A1,I1,A2,I1,A3,I1,A7,I1,A7,I1)") & !,A2,I1,A3,I1,A3,I1,A3,I1)") &
     & "results_current/current_run/l", &
     & INT(WIDTH),"x",INT(HEIGHT),"x",INT(LENGTH), &
     & "_n", &
     & numberOfGlobalXElements,"x",numberOfGlobalYElements,"x",numberOfGlobalZElements, &
     & "_i",lagrangeInterpolationType, "_np", NumberOfComputationalNodes, &
-    & "_spar", equationSparsity !,"_s",SolverIsDirect, &
+    & "_eqSpar", equationSparsity, &
+    & "_soSpar", solverSparsity !,"_s",SolverIsDirect, &
     !& "_fd",JACOBIAN_FD,"_gm",useGeneratedMesh,"_bc",bcDirichlet
   ! make sure directories exist
   INQUIRE(file="./results_current/", exist=directory_exists)
@@ -1057,7 +1088,7 @@ PROGRAM LAPLACE_EQUATION
   END IF
   INQUIRE(file=trim(filename), exist=directory_exists)
   IF (.NOT.directory_exists) THEN
-    CALL execute_command_line ("mkdir "//trim(filename))
+    CALL execute_command_line ("mkdir ./"//trim(filename))
   END IF
 
   ! Export solution
