@@ -92,7 +92,7 @@ PROGRAM LAPLACE_EQUATION
                                    ! For MANUAL mesh, decide if all linear (2), all Hermite (3)
                                    ! or Hermite/linear (1) (cf. Benjamin's example)
                                    ! Generated mesh: only 2 and 3 (NO mix)!!!  
-  INTEGER(CMISSIntg) :: numberOfComponents    ! Geometric Field components:
+  INTEGER(CMISSIntg) :: decompositionType, numberOfComponents    ! Geometric Field components:
   ! my variables 
   INTEGER(CMISSIntg) :: count_components = 1
   INTEGER(CMISSIntg) :: domain, localNodesNumber, derivativeNumber
@@ -100,6 +100,7 @@ PROGRAM LAPLACE_EQUATION
   LOGICAL, ALLOCATABLE :: trackNodes(:)
   LOGICAL :: updateDerivativeForNode
   CHARACTER(LEN=60) :: diagFilename
+  REAL(CMISSRP) :: offSetVer,offSetHor
 
 #ifdef WIN32
   !Initialise QuickWin
@@ -154,18 +155,22 @@ PROGRAM LAPLACE_EQUATION
     READ(commandArgument(1:argumentLength),*) useGeneratedMesh
   ELSE
     !If there are not enough arguments default the problem specification
-    numberOfGlobalXElements=4!2!
-    numberOfGlobalYElements=4!1!
-    numberOfGlobalZElements=0!1!
+    numberOfGlobalXElements=4!4!2!2!2!
+    numberOfGlobalYElements=4!4!1!2!1!
+    numberOfGlobalZElements=0!0!1!2!1!
     ! interpolation type for the Lagrange basis
-    lagrangeInterpolationType = CMFE_BASIS_LINEAR_LAGRANGE_INTERPOLATION ! i.e. 1
-    whichBasis = 2                 ! For MANUAL mesh, decide if all Lagrange (2), all Hermite (3)
-                                   ! or Hermite/Lagrange (1) (cf. Benjamin's example)
+    lagrangeInterpolationType = 1!CMFE_BASIS_LINEAR_LAGRANGE_INTERPOLATION ! i.e. 1
+    whichBasis = 1                 ! For MANUAL mesh, decide if
+                                   ! - all Lagrange linear/quad (2),
+                                   ! - all Hermite (3)
+                                   ! - Hermite/Lagrange LINEAR (1) (cf. Benjamin's example)
                                    ! Generated mesh: only 2 and 3 (NO mix)!!!  
     equationSparsity = CMFE_EQUATIONS_FULL_MATRICES ! Sparsity of the EQUATIONS matrix
     solverSparsity   = CMFE_SOLVER_SPARSE_MATRICES ! Sparsity of the SOLVER matrix
     ! CMFE_SOLVER_FULL_MATRICES
-    useGeneratedMesh = .TRUE. ! Manual mesh only for 2D case, see picture in doc
+    useGeneratedMesh = .FALSE. ! Manual mesh only for 2D case, see picture in doc
+  ! User-defined or automatic decomposition
+    decompositionType = CMFE_DECOMPOSITION_USER_DEFINED_TYPE!CMFE_DECOMPOSITION_CALCULATED_TYPE !
   END IF
 
 
@@ -209,14 +214,23 @@ PROGRAM LAPLACE_EQUATION
   !CALL EXECUTE_COMMAND_LINE("git branch | grep \* | cut -d ' ' -f2")
   !CALL EXECUTE_COMMAND_LINE("cd ~/Desktop/functional_tests/examples_build/laplace_equation/laplace_equation-build/")
 
+!  CALL cmfe_DiagnosticsSetOn(CMFE_IN_DIAG_TYPE,[1,2,3],TRIM(diagFileName),&
   CALL cmfe_DiagnosticsSetOn(CMFE_IN_DIAG_TYPE,[1,2,3],TRIM(diagFileName),&
-    & ["DOMAIN_MAPPINGS_NODES_CALCULATE       ", &
-    &  "DOMAIN_MAPPINGS_INITIALISE            ", &
-!    &  "DECOMPOSITION_TOPOLOGY_LINES_CALCULATE", &
+    & ["DOMAIN_MAPPINGS_NODES_CALCULATE               ", &
+    &  "DOMAIN_MAPPINGS_INITIALISE                    ", &
+    &  "MESH_TOPOLOGY_ELEMENTS_CREATE_FINISH          ", &
+    &  "DECOMPOSITION_TOPOLOGY_LINES_CALCULATE        ", &
 !    &  "DECOMPOSITION_TOPOLOGY_FACES_CALCULATE"], Err)
 !    &  "FIELD_MAPPINGS_CALCULATE       "],Err)
-     & "SOLVER_MATRIX_STRUCTURE_CALCULATE     ", &
-     & "SOLVER_MAPPING_CALCULATE              "], Err)
+    &  "SOLVER_MATRIX_STRUCTURE_CALCULATE             ", &
+    &  "SOLVER_MAPPING_CALCULATE                      ", &
+    &  "DistributedMatrix_StorageLocationsSet         ", &
+    &  "DOMAIN_MAPPINGS_NODES_DOFS_CALCULATE          ", &
+    &  "FIELD_SCALINGS_CALCULATE                      ", &
+    &  "Field_GeometricParametersLineLengthsCalculate ", &
+    &  "DomainMappings_2DLinesCalculate               ", &
+    &  "DomainMappings_3DLinesCalculate               ", &
+    &  "MeshTopology_ElementsAdjacentElementsCalculate"], Err)
   
   !CALL cmfe_OutputSetOn("diagnostics.txt",Err)
 
@@ -442,7 +456,11 @@ PROGRAM LAPLACE_EQUATION
     ! Define nodes for the mesh
     CALL cmfe_Nodes_Initialise(Nodes,Err)
 
-    NumberOfNodes = 25
+    IF (lagrangeInterpolationType==1 .OR. whichBasis==3) THEN ! linear Lagrange or cubic Hermite
+      NumberOfNodes = (numberOfGlobalXElements+1)*(numberOfGlobalXElements+1)
+    ELSEIF (lagrangeInterpolationType==2) THEN
+      NumberOfNodes = (numberOfGlobalXElements*2+1)*(numberOfGlobalXElements*2+1)
+    END IF
     ! Special case 3 nodes
     IF (numberOfGlobalXElements == 3) NumberOfNodes = 8
 
@@ -461,22 +479,24 @@ PROGRAM LAPLACE_EQUATION
       !CALL cmfe_MeshElements_BasisSet(MeshElements,3,LagrangeBasis,Err)
     ELSE
 
-      ! Distribute nodes among elements (cf. picture)
-      DO RowNo = 1,4
-        DO ColumnNo = 1,4
-          GlobalElementNo = (RowNo-1)*4 + ColumnNo
-          GlobalNodeNo = (RowNo-1)*5 + ColumnNo
-          ! OK
-          CALL cmfe_MeshElements_NodesSet(MeshElements, GlobalElementNo, &
-            & [GlobalNodeNo,GlobalNodeNo+1,GlobalNodeNo+5,GlobalNodeNo+6], Err)
-
-          PRINT *, "Element"  
-          PRINT *, GlobalElementNo
-          PRINT *, "Nodes"
-          PRINT *, [GlobalNodeNo,GlobalNodeNo+1,GlobalNodeNo+5,GlobalNodeNo+6]          
+    ! Distribute nodes among elements for a SQUARE(cf. picture)
+      DO RowNo = 1,numberOfGlobalXElements
+        DO ColumnNo = 1,numberOfGlobalXElements
+          GlobalElementNo = (RowNo-1)*numberOfGlobalXElements + ColumnNo
+          IF (lagrangeInterpolationType==1 .OR. whichBasis==3) THEN     !linear Lagrange or cubic Hermite
+            GlobalNodeNo = (RowNo-1)*5 + ColumnNo
+            CALL cmfe_MeshElements_NodesSet(MeshElements, GlobalElementNo, &
+              & [GlobalNodeNo,  GlobalNodeNo+1, &
+              &  GlobalNodeNo+5,GlobalNodeNo+6], Err)
+          ELSE IF (lagrangeInterpolationType==2) THEN
+            GlobalNodeNo = (RowNo-1)*18+(ColumnNo*2-1)
+            CALL cmfe_MeshElements_NodesSet(MeshElements, GlobalElementNo, &
+              & [GlobalNodeNo,   GlobalNodeNo+1, GlobalNodeNo+2,  &
+              &  GlobalNodeNo+9, GlobalNodeNo+10,GlobalNodeNo+11, &
+              &  GlobalNodeNo+18,GlobalNodeNo+19,GlobalNodeNo+20], Err)
+          END IF
         END DO
       END DO
-
     END IF ! number of comp. nodes (3 vs. other)
   
     CALL cmfe_MeshElements_CreateFinish(MeshElements,Err)
@@ -511,40 +531,7 @@ PROGRAM LAPLACE_EQUATION
   END IF ! generated mesh or manual mesh
 
   ! Check the nodes distribution among elements 
-  ! for a manual mesh 4x4 (1,2 or 4 ranks)
-  IF ((.NOT. useGeneratedMesh) .AND. (ComputationalNodeNumber == 0)) THEN
-    ! 4 Nodes/element
-    IF (.NOT. ALLOCATED(elementUserNodes)) THEN
-      ALLOCATE(elementUserNodes(4),STAT=Err)
-      IF(ERR/=0) CALL HandleError("Could not allocate nodes on element array.")
-    END IF
-
-    SELECT CASE (numberOfGlobalXElements)
-    CASE (4)
-      DO RowNo = 1,4
-        DO ColumnNo = 1,4
-          GlobalElementNo = (RowNo-1)*4 + ColumnNo
-          ! Check with nodes get
-          CALL cmfe_MeshElements_NodesGet(MeshElements,GlobalElementNo,elementUserNodes,Err)
-          PRINT *, "Element"
-          PRINT *, GlobalElementNo
-          PRINT *, "Nodes"
-          PRINT *, elementUserNodes          
-        END DO
-      END DO
-    CASE (3)
-      DO GlobalElementNo = 1,3
-        ! Check with nodes get
-        CALL cmfe_MeshElements_NodesGet(MeshElements,GlobalElementNo,elementUserNodes,Err)
-        PRINT *, "Element"
-        PRINT *, GlobalElementNo
-        PRINT *, "Nodes"
-        PRINT *, elementUserNodes          
-      END DO
-    CASE DEFAULT
-      CALL HandleError("Invalid number of X-nodes for this example!")
-    END SELECT
-  END IF 
+  ! Use diagnostic MESH_TOPOLOGY_ELEMENTS_CREATE_FINISH!
   ! global element numbers
   !13 14 15 16
   ! 9 10 11 12
@@ -559,92 +546,115 @@ PROGRAM LAPLACE_EQUATION
   CALL cmfe_Decomposition_CreateStart(DecompositionUserNumber,Mesh,Decomposition,Err)
   ! Set the decomposition to be a general decomposition with the specified number of domains
 
-  ! User-defined decomposition
-  CALL cmfe_Decomposition_TypeSet(Decomposition,CMFE_DECOMPOSITION_USER_DEFINED_TYPE,Err)
-  ! Automatic decomposition
-  !CALL cmfe_Decomposition_TypeSet(decomposition,CMFE_DECOMPOSITION_CALCULATED_TYPE,err)
+  !If Hermite elements 3D we need lines computation. Default 3D is false.
+  !Fixed for now only for -np 1
+  !IF(whichBasis/=2)?
+  !IF (numberOfGlobalZElements >=1 .AND. NumberOfComputationalNodes==1) &
+  !Compute lines also in 3D (default false) - there will be an error msg if -np >1:
+  CALL cmfe_Decomposition_CalculateLinesSet(Decomposition, .TRUE., Err)
+
+  CALL cmfe_Decomposition_TypeSet(decomposition,decompositionType,err)
   CALL cmfe_Decomposition_NumberOfDomainsSet(Decomposition,NumberOfComputationalNodes,Err)
    
   SetDecompositionDistributed = .FALSE. ! True only works with new implementation, false works with both.
                                         ! Affects decomposition for 4 nodes (below).
                                         ! NOT SURE WHAT IT MEANS THOUGH!!!!!!!!!!
 
-  IF (numberOfGlobalZElements >=1) THEN
-    ! 3D, max -np 2 for 2 elements
-    SELECT CASE (NumberOfComputationalNodes)
-    CASE (1)
-      DO I=1,NumberOfElements
+  IF(decompositionType==CMFE_DECOMPOSITION_USER_DEFINED_TYPE) THEN
+    IF (numberOfGlobalZElements >=1) THEN
+     ! 3D, max -np 2 for 2 elements
+      SELECT CASE (NumberOfComputationalNodes)
+      CASE (1)
+        DO I=1,NumberOfElements
         ! All nodes to the same rank
-        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,I,0,Err)
-      END DO
-    CASE (2)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,1,0,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,2,1,Err)
-    CASE DEFAULT
-      CALL HandleError("3D case supported for max 2 ranks!!!")      
-    END SELECT
-  ELSE
+          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,I,0,Err)
+        END DO
+      CASE (2)
+        IF (NumberOfElements ==2) THEN
+          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,1,0,Err)
+          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,2,1,Err)
+        ELSE
+          CALL HandleError("3D case 2 ranks requires 2 elements!!!")
+        END IF
+      CASE(4)
+!        IF (NumberOfElements ==8) THEN
+!          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,1,0,Err)
+!          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,2,0,Err)
+!          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,3,1,Err)
+!          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,4,1,Err)
+!          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,5,2,Err)
+!          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,6,2,Err)
+!          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,7,3,Err)
+!          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,8,3,Err)
+!        ELSE
+          CALL HandleError("3D case 4 ranks requires calculated decomposition!!!")
+!        END IF
+      CASE DEFAULT
+        CALL HandleError("3D case supported for 2 or 4 ranks!!!")
+      END SELECT
+    ELSE
     ! 2D case
-    SELECT CASE (NumberOfComputationalNodes)
-    CASE (1)
-      DO I=1,NumberOfElements
+      SELECT CASE (NumberOfComputationalNodes)
+      CASE (1)
+        DO I=1,NumberOfElements
         ! All nodes to the same rank
-        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,I,0,Err)
-      END DO
-    CASE (2)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,1,0,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,2,0,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,5,0,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,6,0,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,9,0,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,10,0,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,13,0,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,14,0,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,3,1,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,4,1,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,7,1,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,8,1,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,11,1,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,12,1,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,15,1,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,16,1,Err)
-    CASE (3)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,1,0,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,2,1,Err)
-      CALL cmfe_Decomposition_ElementDomainSet(Decomposition,3,2,Err)
-    CASE (4)
-      IF (ComputationalNodeNumber == 0 .OR..NOT.SetDecompositionDistributed) THEN
-      !                                             global el., domain
-        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,9,2,Err)
-        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,5,0,Err)
-        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,14,2,Err)
-        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,11,3,Err)
-        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,6,0,Err)
-        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,16,3,Err)
-      END IF
-    
-      IF (ComputationalNodeNumber == 1 .OR..NOT.SetDecompositionDistributed) THEN
-        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,7,0,Err)
-        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,15,3,Err)
+          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,I,0,Err)
+        END DO
+      CASE (2)
         CALL cmfe_Decomposition_ElementDomainSet(Decomposition,1,0,Err)
-      END IF
-    
-      IF (ComputationalNodeNumber == 2 .OR..NOT.SetDecompositionDistributed) THEN
-        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,10,2,Err)
-        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,8,1,Err)
-      END IF
-    
-      IF (ComputationalNodeNumber == 3 .OR..NOT.SetDecompositionDistributed) THEN
         CALL cmfe_Decomposition_ElementDomainSet(Decomposition,2,0,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,5,0,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,6,0,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,9,0,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,10,0,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,13,0,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,14,0,Err)
         CALL cmfe_Decomposition_ElementDomainSet(Decomposition,3,1,Err)
-        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,12,3,Err)
         CALL cmfe_Decomposition_ElementDomainSet(Decomposition,4,1,Err)
-        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,13,2,Err)
-      END IF
-    CASE DEFAULT
-      CALL HandleError("Number of nodes NOT supported (max 4)!!!")
-    END SELECT
-  END IF ! number of dimensions 
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,7,1,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,8,1,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,11,1,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,12,1,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,15,1,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,16,1,Err)
+      CASE (3)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,1,0,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,2,1,Err)
+        CALL cmfe_Decomposition_ElementDomainSet(Decomposition,3,2,Err)
+      CASE (4)
+        IF (ComputationalNodeNumber == 0 .OR..NOT.SetDecompositionDistributed) THEN
+      !                                             global el., domain
+          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,9,2,Err)
+          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,5,0,Err)
+          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,14,2,Err)
+          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,11,3,Err)
+          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,6,0,Err)
+          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,16,3,Err)
+        END IF
+    
+        IF (ComputationalNodeNumber == 1 .OR..NOT.SetDecompositionDistributed) THEN
+          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,7,0,Err)
+          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,15,3,Err)
+          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,1,0,Err)
+        END IF
+    
+        IF (ComputationalNodeNumber == 2 .OR..NOT.SetDecompositionDistributed) THEN
+          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,10,2,Err)
+          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,8,1,Err)
+        END IF
+
+        IF (ComputationalNodeNumber == 3 .OR..NOT.SetDecompositionDistributed) THEN
+          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,2,0,Err)
+          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,3,1,Err)
+          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,12,3,Err)
+          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,4,1,Err)
+          CALL cmfe_Decomposition_ElementDomainSet(Decomposition,13,2,Err)
+        END IF
+      CASE DEFAULT
+        CALL HandleError("Number of nodes NOT supported (max 4)!!!")
+      END SELECT
+    END IF ! number of dimensions
+  END IF ! decomposition type
   !Finish the decomposition
   CALL cmfe_Decomposition_CreateFinish(Decomposition,Err)
  
@@ -723,6 +733,7 @@ PROGRAM LAPLACE_EQUATION
   ! Update the geometric field parameters for a parallel simulation
   IF (useGeneratedMesh) THEN
     CALL cmfe_GeneratedMesh_GeometricParametersCalculate(generatedMesh,GeometricField,Err)
+    WRITE(*,*) "Update completed."
   ELSE
 
     ! Update the geometric field parameters manually if mesh is NOT a generated mesh
@@ -760,145 +771,266 @@ PROGRAM LAPLACE_EQUATION
     ! For linear basis and no-derivative, update position of nodes. 
     ! CMFE_NO_GLOBAL_DERIV = 1
 
-    DO GlobalNodeNo = 1,NumberOfNodes
+    ! Case quadratic Lagrange (ALL elements!!!)
+    IF (lagrangeInterpolationType==2 .AND. whichBasis==2) THEN !Basis is all quadratic Lagrange
+      derivativeNumber=1
+      DO RowNo = 1,numberOfGlobalXElements
+        offSetVer = HEIGHT/4.0_CMISSRP*(REAL(RowNo,CMISSRP)-1)
+        DO ColumnNo = 1,numberOfGlobalXElements
+          offSetHor = WIDTH/4.0_CMISSRP*(REAL(ColumnNo,CMISSRP)-1)
+          GlobalNodeNo = (RowNo-1)*18+(ColumnNo*2-1)
+     ! To which rank this node belongs
+          CALL cmfe_Decomposition_NodeDomainGet(RegionUserNumber,MeshUserNumber,DecompositionUserNumber, &
+            & GlobalNodeNo,1,domain,Err)
+     ! Only LOCAL nodes can be updated
+          IF (ComputationalNodeNumber == domain) THEN
+            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,2, &
+              & offSetVer,Err)
+            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,1, &
+              & offSetHor,Err)
+          END IF
+          CALL cmfe_Decomposition_NodeDomainGet(RegionUserNumber,MeshUserNumber,DecompositionUserNumber, &
+            & GlobalNodeNo+9,1,domain,Err)
+     ! Only LOCAL nodes can be updated
+          IF (ComputationalNodeNumber == domain) THEN
+            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo+9,2, &
+              & offSetVer+HEIGHT/8.0_CMISSRP,Err)
+            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo+9,1, &
+              & offSetHor,Err)
+          END IF
+          CALL cmfe_Decomposition_NodeDomainGet(RegionUserNumber,MeshUserNumber,DecompositionUserNumber, &
+            & GlobalNodeNo+18,1,domain,Err)
+     ! Only LOCAL nodes can be updated
+          IF (ComputationalNodeNumber == domain) THEN
+            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo+18,2, &
+              & offSetVer+2.0_CMISSRP*HEIGHT/8.0_CMISSRP,Err)
+            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo+18,1, &
+              & offSetHor,Err)
+          END IF
+          CALL cmfe_Decomposition_NodeDomainGet(RegionUserNumber,MeshUserNumber,DecompositionUserNumber, &
+            & GlobalNodeNo+1,1,domain,Err)
+     ! Only LOCAL nodes can be updated
+          IF (ComputationalNodeNumber == domain) THEN
+            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo+1,2, &
+              & offSetVer,Err)
+            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo+1,1, &
+              & offSetHor+WIDTH/8.0_CMISSRP,Err)
+          END IF
+          CALL cmfe_Decomposition_NodeDomainGet(RegionUserNumber,MeshUserNumber,DecompositionUserNumber, &
+            & GlobalNodeNo+10,1,domain,Err)
+     ! Only LOCAL nodes can be updated
+          IF (ComputationalNodeNumber == domain) THEN
+            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo+10,2, &
+              & offSetVer+HEIGHT/8.0_CMISSRP,Err)
+            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo+10,1, &
+              & offSetHor+WIDTH/8.0_CMISSRP,Err)
+          END IF
+          CALL cmfe_Decomposition_NodeDomainGet(RegionUserNumber,MeshUserNumber,DecompositionUserNumber, &
+            & GlobalNodeNo+19,1,domain,Err)
+     ! Only LOCAL nodes can be updated
+          IF (ComputationalNodeNumber == domain) THEN
+            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo+19,2, &
+              & offSetVer+2.0_CMISSRP*HEIGHT/8.0_CMISSRP,Err)
+            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo+19,1, &
+              & offSetHor+WIDTH/8.0_CMISSRP,Err)
+          END IF
+          CALL cmfe_Decomposition_NodeDomainGet(RegionUserNumber,MeshUserNumber,DecompositionUserNumber, &
+            & GlobalNodeNo+2,1,domain,Err)
+     ! Only LOCAL nodes can be updated
+          IF (ComputationalNodeNumber == domain) THEN
+            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo+2,2, &
+              & offSetVer,Err)
+            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo+2,1, &
+              & offSetHor+2.0_CMISSRP*WIDTH/8.0_CMISSRP,Err)
+          END IF
+          CALL cmfe_Decomposition_NodeDomainGet(RegionUserNumber,MeshUserNumber,DecompositionUserNumber, &
+            & GlobalNodeNo+11,1,domain,Err)
+     ! Only LOCAL nodes can be updated
+          IF (ComputationalNodeNumber == domain) THEN
+            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo+11,2, &
+              & offSetVer+HEIGHT/8.0_CMISSRP,Err)
+            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo+11,1, &
+              & offSetHor+2.0_CMISSRP*WIDTH/8.0_CMISSRP,Err)
+          END IF
+          CALL cmfe_Decomposition_NodeDomainGet(RegionUserNumber,MeshUserNumber,DecompositionUserNumber, &
+            & GlobalNodeNo+20,1,domain,Err)
+     ! Only LOCAL nodes can be updated
+          IF (ComputationalNodeNumber == domain) THEN
+            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo+20,2, &
+              & offSetVer+2.0_CMISSRP*HEIGHT/8.0_CMISSRP,Err)
+            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo+20,1, &
+              & offSetHor+2.0_CMISSRP*WIDTH/8.0_CMISSRP,Err)
+          END IF
+            !CALL cmfe_MeshElements_NodesSet(MeshElements, GlobalElementNo, &
+            !  & [GlobalNodeNo,   GlobalNodeNo+1, GlobalNodeNo+2,  &
+            !  &  GlobalNodeNo+9, GlobalNodeNo+10,GlobalNodeNo+11, &
+            !  &  GlobalNodeNo+18,GlobalNodeNo+19,GlobalNodeNo+20], Err)
+        END DO
+      END DO
+    ! IF linear lagrange or Hermite or mixed
+    ELSE
+
+      DO GlobalNodeNo = 1,NumberOfNodes
 
      ! To which rank this node belongs
-      CALL cmfe_Decomposition_NodeDomainGet(RegionUserNumber,MeshUserNumber,DecompositionUserNumber, &
-        & GlobalNodeNo,1,domain,Err)
+        CALL cmfe_Decomposition_NodeDomainGet(RegionUserNumber,MeshUserNumber,DecompositionUserNumber, &
+          & GlobalNodeNo,1,domain,Err)
 
      ! Only LOCAL nodes can be updated
-      IF (ComputationalNodeNumber == domain) THEN
+        IF (ComputationalNodeNumber == domain) THEN
 
-        derivativeNumber=1
-        SELECT CASE (numberOfElements) 
-        CASE (16)
+          derivativeNumber=1
+          SELECT CASE (numberOfElements)
+          CASE (16)
 
-          SELECT CASE (GlobalNodeNo)
-          CASE (1,6,11,16,21)
+            SELECT CASE (GlobalNodeNo)
+            CASE (1,6,11,16,21)
     ! node 1
     !SUBROUTINE FIELD_PARAMETER_SET_UPDATE_NODE_INTG(FIELD,VARIABLE_TYPE,FIELD_SET_TYPE,VERSION_NUMBER,DERIVATIVE_NUMBER, &
     !  & USER_NODE_NUMBER,COMPONENT_NUMBER,VALUE,ERR,ERROR,*)
-            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
-              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,1,0.0_CMISSRP,Err)
-          CASE (2,7,12,17,22)
-            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
-              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,1,WIDTH/4.0_CMISSRP,Err)
-          CASE (3,8,13,18,23)
-            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
-              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,1,WIDTH/2.0_CMISSRP,Err)
-          CASE (4,9,14,19,24)
-            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
-              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,1,3.0_CMISSRP*WIDTH/4.0_CMISSRP,Err)
-          CASE (5,10,15,20,25)
-            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
-              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,1,WIDTH,Err)
+              CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+                & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,1,0.0_CMISSRP,Err)
+            CASE (2,7,12,17,22)
+              CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+                & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,1,WIDTH/4.0_CMISSRP,Err)
+            CASE (3,8,13,18,23)
+              CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+                & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,1,WIDTH/2.0_CMISSRP,Err)
+            CASE (4,9,14,19,24)
+              CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+                & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,1,3.0_CMISSRP*WIDTH/4.0_CMISSRP,Err)
+            CASE (5,10,15,20,25)
+              CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+                & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,1,WIDTH,Err)
+            CASE DEFAULT
+              CALL HandleError("Node out of reach!")
+            END SELECT
+
+            SELECT CASE (GlobalNodeNo)
+            CASE (1,2,3,4,5)
+              CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+                & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,2,0.0_CMISSRP,Err)
+            CASE (6,7,8,9,10)
+              CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+                & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,2,HEIGHT/4.0_CMISSRP,Err)
+            CASE (11,12,13,14,15)
+               CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+                 & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,2,HEIGHT/2.0_CMISSRP,Err)
+            CASE (16,17,18,19,20)
+              CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+                & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,2,3.0_CMISSRP*HEIGHT/4.0_CMISSRP,Err)
+            CASE (21,22,23,24,25)
+              CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+                & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,2,HEIGHT,Err)
+            CASE DEFAULT
+              CALL HandleError("Node out of reach!")
+            END SELECT
+
+          CASE(3) ! special case 3 nodes
+
+            SELECT CASE (GlobalNodeNo)
+            CASE (1,5)
+              CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+                & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,1,0.0_CMISSRP,Err)
+            CASE (2,6)
+              CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+                & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,1,WIDTH/3.0_CMISSRP,Err)
+            CASE (3,7)
+              CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+                & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,1,2.0_CMISSRP*WIDTH/3.0_CMISSRP,Err)
+            CASE (4,8)
+              CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+                & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,1,WIDTH,Err)
+            CASE DEFAULT
+              CALL HandleError("Node out of reach!")
+            END SELECT
+
+            SELECT CASE (GlobalNodeNo)
+            CASE (1,2,3,4)
+              CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+                & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,2,0.0_CMISSRP,Err)
+            CASE (5,6,7,8)
+              CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+                & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,2,HEIGHT,Err)
+            CASE DEFAULT
+              CALL HandleError("Node out of reach!")
+            END SELECT
+
           CASE DEFAULT
-            CALL HandleError("Node out of reach!")
-          END SELECT
+            CALL HandleError("Number of elements not supported!")
+          END SELECT ! number of elements
+        !END DO ! derivatives
 
-          SELECT CASE (GlobalNodeNo)
-          CASE (1,2,3,4,5)
-            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
-              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,2,0.0_CMISSRP,Err)
-           CASE (6,7,8,9,10)
-            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
-              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,2,HEIGHT/4.0_CMISSRP,Err)
-          CASE (11,12,13,14,15)
-            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
-              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,2,HEIGHT/2.0_CMISSRP,Err)      
-          CASE (16,17,18,19,20)
-            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
-              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,2,3.0_CMISSRP*HEIGHT/4.0_CMISSRP,Err)
-          CASE (21,22,23,24,25)
-            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
-              & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,2,HEIGHT,Err)
-          CASE DEFAULT
-            CALL HandleError("Node out of reach!")
-          END SELECT
-
-        CASE(3) ! special case 3 nodes  
-
-        SELECT CASE (GlobalNodeNo)
-        CASE (1,5)
-          CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
-            & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,1,0.0_CMISSRP,Err)
-        CASE (2,6)
-          CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
-            & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,1,WIDTH/3.0_CMISSRP,Err)
-        CASE (3,7)
-          CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
-            & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,1,2.0_CMISSRP*WIDTH/3.0_CMISSRP,Err)
-        CASE (4,8)
-          CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
-            & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,1,WIDTH,Err)
-        CASE DEFAULT
-          CALL HandleError("Node out of reach!")
-        END SELECT
-        SELECT CASE (GlobalNodeNo)
-        CASE (1,2,3,4)
-          CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
-            & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,2,0.0_CMISSRP,Err)
-        CASE (5,6,7,8)
-          CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
-            & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,2,HEIGHT,Err)
-        CASE DEFAULT
-          CALL HandleError("Node out of reach!")
-        END SELECT        
-
-        CASE DEFAULT
-          CALL HandleError("Number of elements not supported!")
-        END SELECT ! number of elements
-        !END DO ! derivatives    
-
-        updateDerivativeForNode = .FALSE.
-
-        SELECT CASE (whichBasis)
-        CASE(1) ! MIX: look up if node is a Hermite node
-          DO I = 1,size(hermiteNodes)
-            IF (GlobalNodeNo == hermiteNodes(I)) updateDerivativeForNode = .TRUE.
-          END DO
-        CASE(2) ! all linear: do not set any derivative
           updateDerivativeForNode = .FALSE.
-        CASE(3) ! all Hermite: update all derivatives for all nodes
-          updateDerivativeForNode = .TRUE.
-        CASE DEFAULT
-          CALL HandleError("Choice of basis incorrect!")     
-        END SELECT
 
-        IF (updateDerivativeForNode) THEN 
-          derivativeNumber = 2 ! x derivative
-          CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+          SELECT CASE (whichBasis)
+          CASE(1) ! MIX: look up if node is a Hermite node
+            DO I = 1,size(hermiteNodes)
+              IF (GlobalNodeNo == hermiteNodes(I)) updateDerivativeForNode = .TRUE.
+            END DO
+          CASE(2) ! all linear: do not set any derivative
+            updateDerivativeForNode = .FALSE.
+          CASE(3) ! all Hermite: update all derivatives for all nodes
+            updateDerivativeForNode = .TRUE.
+          CASE DEFAULT
+            CALL HandleError("Choice of basis incorrect!")
+          END SELECT
+
+          IF (updateDerivativeForNode) THEN
+            derivativeNumber = 2 ! x derivative
+            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
               & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,1,1.0_CMISSRP,Err)
-          CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
               & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,2,0.0_CMISSRP,Err)
-          derivativeNumber = 3 ! y derivative
-          CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+            derivativeNumber = 3 ! y derivative
+            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
               & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,1,0.0_CMISSRP,Err)
-          CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
               & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,2,1.0_CMISSRP,Err)
-          derivativeNumber = 4 ! xy derivative
-          CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+            derivativeNumber = 4 ! xy derivative
+            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
               & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,1,0.0_CMISSRP,Err)
-          CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
+            CALL cmfe_Field_ParameterSetUpdateNode(geometricField,CMFE_FIELD_U_VARIABLE_TYPE, &
               & CMFE_FIELD_VALUES_SET_TYPE,1,derivativeNumber,GlobalNodeNo,2,0.0_CMISSRP,Err)
-        END IF
+          END IF
 
-        PRINT *, "Updated node number in rank"
-        PRINT *, domain, GlobalNodeNo
- 
-      END IF ! Comp. node number == domain of the node
+          PRINT *, "Updated node number in rank"
+          PRINT *, domain, GlobalNodeNo
 
-    END DO ! Global nodes
+        END IF ! Comp. node number == domain of the node
 
+      END DO ! Global nodes
+
+    END IF ! Lagrange Int Type
 
     IF(numberOfGlobalZElements/=0) THEN
-      CALL HandleError("Node out of reach!")
+      CALL HandleError("No manual update implemented for 3D!")
     END IF
 
     CALL cmfe_Field_ParameterSetUpdateStart(geometricField, &
       & CMFE_FIELD_U_VARIABLE_TYPE,CMFE_FIELD_VALUES_SET_TYPE,Err) 
     CALL cmfe_Field_ParameterSetUpdateFinish(geometricField, &
       & CMFE_FIELD_U_VARIABLE_TYPE,CMFE_FIELD_VALUES_SET_TYPE,Err)
+
+    WRITE(*,*) "Update completed."
     
   END IF ! Generated or manual mesh
   
@@ -986,16 +1118,14 @@ PROGRAM LAPLACE_EQUATION
 ! CALL cmfe_Solver_OutputTypeSet(Solver,CMFE_SOLVER_PROGRESS_OUTPUT,Err)
 ! CALL cmfe_Solver_OutputTypeSet(Solver,CMFE_SOLVER_TIMING_OUTPUT,Err)
 ! CALL cmfe_Solver_OutputTypeSet(Solver,CMFE_SOLVER_SOLVER_OUTPUT,Err)
-! CALL cmfe_Solver_OutputTypeSet(Solver,CMFE_SOLVER_MATRIX_OUTPUT,Err)
-  
-  CALL cmfe_Solver_LinearTypeSet(Solver,CMFE_SOLVER_LINEAR_ITERATIVE_SOLVE_TYPE,Err)
-  CALL cmfe_Solver_LinearIterativeAbsoluteToleranceSet(Solver,1.0E-12_CMISSRP,Err)
-  CALL cmfe_Solver_LinearIterativeRelativeToleranceSet(Solver,1.0E-12_CMISSRP,Err)
+ CALL cmfe_Solver_OutputTypeSet(Solver,CMFE_SOLVER_MATRIX_OUTPUT,Err)
 
 !  CASE FULL
 !  CALL cmfe_Solver_LinearTypeSet(Solver,CMFE_SOLVER_LINEAR_ITERATIVE_SOLVE_TYPE,Err)
+!  CALL cmfe_Solver_LinearIterativeAbsoluteToleranceSet(Solver,1.0E-12_CMISSRP,Err)
+!  CALL cmfe_Solver_LinearIterativeRelativeToleranceSet(Solver,1.0E-12_CMISSRP,Err)
 !  CASE SPARSE
-!  CALL cmfe_Solver_LinearTypeSet(Solver,CMFE_SOLVER_LINEAR_DIRECT_SOLVE_TYPE,Err)
+  CALL cmfe_Solver_LinearTypeSet(Solver,CMFE_SOLVER_LINEAR_DIRECT_SOLVE_TYPE,Err)
 
 ! Do not select any for now
 ! CASE SPARSE  
@@ -1043,12 +1173,14 @@ PROGRAM LAPLACE_EQUATION
   IF(FirstNodeDomain==ComputationalNodeNumber) THEN
     CALL cmfe_BoundaryConditions_SetNode(BoundaryConditions,DependentField,CMFE_FIELD_U_VARIABLE_TYPE,1,1,FirstNodeNumber,1, &
       & CMFE_BOUNDARY_CONDITION_FIXED,0.0_CMISSRP,Err)
+    !WRITE(*,*) "BC set 0"
     !CALL cmfe_BoundaryConditions_AddNode(BoundaryConditions,DependentField,CMFE_FIELD_U_VARIABLE_TYPE,1,1,FirstNodeNumber,1, &
     !  & CMFE_BOUNDARY_CONDITION_FIXED,0.0_CMISSRP,Err)
   END IF
   IF(LastNodeDomain==ComputationalNodeNumber) THEN
     CALL cmfe_BoundaryConditions_SetNode(BoundaryConditions,DependentField,CMFE_FIELD_U_VARIABLE_TYPE,1,1,LastNodeNumber,1, &
       & CMFE_BOUNDARY_CONDITION_FIXED,1.0_CMISSRP,Err)
+    !WRITE(*,*) "BC set 1"
     !CALL cmfe_BoundaryConditions_AddNode(BoundaryConditions,DependentField,CMFE_FIELD_U_VARIABLE_TYPE,1,1,LastNodeNumber,1, &
     !  & CMFE_BOUNDARY_CONDITION_FIXED,1.0_CMISSRP,Err)
   END IF
@@ -1104,6 +1236,9 @@ PROGRAM LAPLACE_EQUATION
 
   WRITE(*,'(A)') "Program successfully completed."
   
+  ! CALL Get_MemoryConsumption()
+  ! Output must be multiplied X number of cores!!!
+
   STOP
   
 CONTAINS
@@ -1113,5 +1248,112 @@ CONTAINS
     WRITE(*,'(">>ERROR: ",A)') errorString(1:LEN_TRIM(errorString))
     STOP
   END SUBROUTINE HandleError
+
+  SUBROUTINE Get_MemoryConsumption()
+    CHARACTER(LEN=100) :: GetMemoryConsumption
+    CHARACTER(LEN=100) ::  &
+      & pid, comm, state, ppid, pgrp, session, tty_nr, &
+      & tpgid, flags, minflt, cminflt, majflt, cmajflt, &
+      & utime, stime, cutime, cstime, priority, nice, &
+      & O, itrealvalue, starttime, Description, Limit
+    CHARACTER(LEN=10000) :: Debug
+    INTEGER(CMISSIntg) :: I,Stat
+    INTEGER(CMISSLintg) :: MemoryConsumption, &
+      & VmSize, VmRSS, Shared, Text, Lib, Data, Dt, RssLimBytes, RssAnon, Pagesize, VSizeBytes
+
+    ! Critical Section
+    DO I=0,NumberOfComputationalNodes
+    !CALL MPI_BARRIER(MPI_COMM_WORLD, Err)
+      IF (I == ComputationalNodeNumber) THEN
+
+      ! read memory page size
+        Stat = 0
+        IF (I==0) CALL SYSTEM("getconf PAGESIZE > pagesize", Stat)
+        IF (Stat == 0) THEN
+          OPEN(UNIT=10, FILE="pagesize", ACTION="read", IOSTAT=Stat)
+          IF (Stat == 0) THEN
+            READ(10,*, IOSTAT=Stat) Pagesize
+            CLOSE(UNIT=10)
+          ELSE
+            PRINT*, "Error opening pagesize."
+          ENDIF
+        ELSE
+          PRINT*, "Error calling 'getconf PAGESIZE'"
+          Pagesize = 4096
+        ENDIF
+
+      ! read from /proc/self/stat
+      ! see http://man7.org/linux/man-pages/man5/proc.5.html for reference
+        OPEN(UNIT=10, FILE="/proc/self/stat", ACTION="read", IOSTAT=stat)
+        IF (STAT /= 0) THEN
+          PRINT*, "Could not read memory consumption from /proc/self/stat."
+        ELSE
+        !READ(10,"(A)",IOSTAT=stat,advance='no') Debug
+        !PRINT*, "proc/self/stat: "//TRIM(Debug)
+          READ(10,*, IOSTAT=stat) pid, comm, state, ppid, pgrp, session, tty_nr, &
+            & tpgid, flags, minflt, cminflt, majflt, cmajflt, &
+            & utime, stime, cutime, cstime, priority, nice, &
+            & O, itrealvalue, starttime, VSizeBytes, VmRSS, RssLimBytes
+          CLOSE(UNIT=10)
+
+          MemoryConsumption = VSizeBytes
+
+          IF (ComputationalNodeNumber == 0) THEN
+            WRITE(*, "(A,F7.3,A,I11,A,F7.3,A)") "     MemoryConsumption:", (MemoryConsumption/1e9), " GB (", &
+              & MemoryConsumption, " B), Resident: ", (VmRSS*PageSize/1e9), " GB"
+          ENDIF
+
+          WRITE(GetMemoryConsumption, *) MemoryConsumption
+        ENDIF
+
+      ! read from /proc/self/limits
+        IF (.TRUE.) THEN
+          OPEN(UNIT=10, FILE="/proc/self/limits", ACTION="read", IOSTAT=stat)
+          IF (STAT /= 0) THEN
+            PRINT*, "Could not read limits from /proc/self/limits."
+          ELSE
+            DO
+              READ(10, "(A26,A21)", IOSTAT=Stat) Description, Limit
+              !PRINT*, "Description:["//TRIM(Description)//"], Limit:["//TRIM(Limit)//"]"
+              IF (Stat /= 0) EXIT
+              IF (INDEX(Description, "Max resident set") /= 0) THEN
+                IF (TRIM(Limit) == "unlimited") THEN
+                  IF (ComputationalNodeNumber == 0) PRINT*, "    (Resident has no soft limit)"
+                ELSE
+                  IF (ComputationalNodeNumber == 0) PRINT*, "    (Resident is limited to ", Limit,")"
+                ENDIF
+              ENDIF
+            ENDDO
+            CLOSE(UNIT=10)
+          ENDIF
+        ENDIF
+
+      ! read from /proc/self/statm
+        OPEN(UNIT=10, FILE="/proc/self/statm", ACTION="read", IOSTAT=stat)
+        IF (STAT /= 0) THEN
+          PRINT*, "Could not read memory consumption from /proc/self/statm."
+        ELSE
+          READ(10,*, IOSTAT=stat) VmSize, VmRSS, Shared, Text, Lib, Data, Dt
+          CLOSE(UNIT=10)
+
+        ! VmRSS = RssAnon + Shared (all as number of pages)
+        ! RssAnon is the resident set size of anonymous memory (real memory in RAM, not laid out in files)
+          RssAnon = VmRSS - Shared
+
+          IF (ComputationalNodeNumber == 0) THEN
+          !PRINT*, "VmSize: ", VmSize, ", VmRSS: ", VmRSS, ", Shared: ", Shared, ", Text: ", Text, ", Lib:", Lib, ", Data:", Data
+          !PRINT*, "RssAnon: ", RSSAnon, ", RssLimBytes: ", RssLimBytes, ", Pagesize: ", Pagesize
+
+          ! Output Percentage
+          !WRITE(*, "(3(A,F7.3),A,F5.1,A)") "     VmSize:", (VmSize*Pagesize/1.e9), " GB, RssAnon:", (RssAnon*Pagesize/1.e9), &
+          !  & " GB, RssLimBytes: ", (RssLimBytes/1.e9), " GB (", (REAL(RssAnon*Pagesize) / RssLimBytes * 100.0), "%)"
+          ENDIF
+        ENDIF
+
+      !PRINT*, TRIM(cmfe_CustomProfilingGetInfo(Err))
+      ENDIF
+    ENDDO
+  END SUBROUTINE Get_MemoryConsumption
+
     
 END PROGRAM LAPLACE_EQUATION
