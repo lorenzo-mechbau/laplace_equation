@@ -160,17 +160,27 @@ PROGRAM LAPLACE_EQUATION
     numberOfGlobalZElements=0!0!1!2!1!
     ! interpolation type for the Lagrange basis
     lagrangeInterpolationType = 1!CMFE_BASIS_LINEAR_LAGRANGE_INTERPOLATION ! i.e. 1
-    whichBasis = 1                 ! For MANUAL mesh, decide if
+    whichBasis = 2                 ! For MANUAL mesh, decide if
                                    ! - all Lagrange linear/quad (2),
                                    ! - all Hermite (3)
                                    ! - Hermite/Lagrange LINEAR (1) (cf. Benjamin's example)
                                    ! Generated mesh: only 2 and 3 (NO mix)!!!  
     equationSparsity = CMFE_EQUATIONS_FULL_MATRICES ! Sparsity of the EQUATIONS matrix
     solverSparsity   = CMFE_SOLVER_SPARSE_MATRICES ! Sparsity of the SOLVER matrix
+    numberOfComponents = 2!
+    ! -2 NEVER CHANGE! Unless testing hash tables.
+    ! MUST be 2 for FV_lorenzo_merged, but also error occurring!!!
+    ! -3 add 1 element-based
+    ! -4 add 1 constant-based but NO solve if these components added!
     ! CMFE_SOLVER_FULL_MATRICES
-    useGeneratedMesh = .FALSE. ! Manual mesh only for 2D case, see picture in doc
+    useGeneratedMesh = .TRUE. ! Manual mesh only for 2D case, see picture in doc
   ! User-defined or automatic decomposition
-    decompositionType = CMFE_DECOMPOSITION_USER_DEFINED_TYPE!CMFE_DECOMPOSITION_CALCULATED_TYPE !
+    decompositionType = CMFE_DECOMPOSITION_USER_DEFINED_TYPE!CMFE_DECOMPOSITION_CALCULATED_TYPE!!
+
+    SetDecompositionDistributed = .TRUE.!.FALSE.! TRUE ONLY for Benjamin!!!
+                                         ! True only works with new implementation, false works with both.
+                                         ! Affects decomposition for 4 nodes (below).
+
   END IF
 
 
@@ -221,7 +231,7 @@ PROGRAM LAPLACE_EQUATION
     &  "MESH_TOPOLOGY_ELEMENTS_CREATE_FINISH          ", &
     &  "DECOMPOSITION_TOPOLOGY_LINES_CALCULATE        ", &
 !    &  "DECOMPOSITION_TOPOLOGY_FACES_CALCULATE"], Err)
-!    &  "FIELD_MAPPINGS_CALCULATE       "],Err)
+    &  "FIELD_MAPPINGS_CALCULATE                      ", &
     &  "SOLVER_MATRIX_STRUCTURE_CALCULATE             ", &
     &  "SOLVER_MAPPING_CALCULATE                      ", &
     &  "DistributedMatrix_StorageLocationsSet         ", &
@@ -230,8 +240,15 @@ PROGRAM LAPLACE_EQUATION
     &  "Field_GeometricParametersLineLengthsCalculate ", &
     &  "DomainMappings_2DLinesCalculate               ", &
     &  "DomainMappings_3DLinesCalculate               ", &
-    &  "MeshTopology_ElementsAdjacentElementsCalculate"], Err)
-  
+    &  "MeshTopology_ElementsAdjacentElementsCalculate", &
+    &  "DOMAIN_MAPPINGS_LOCAL_FROM_GLOBAL_CALCULATE   ", &
+    &  "DECOMPOSITION_ELEMENTS_MAPPING_MAP            ", &
+    &  "DECOMPOSITION_ADJACENT_DOMAINS_CALCULATE      ", &
+    &  "DOMAIN_MAPPINGS_ELEMENTS_CALCULATE            ", &
+    &  "DECOMPOSITION_ELEMENT_DOMAIN_CALCULATE        ", &
+    &  "DECOMPOSITION_ELEMENTS_MAPPING_MAP_CALCULATE  ", &
+    &  "DECOMPOSITION_ELEMENTS_MAPPING_CALCULATE      "], Err)
+
   !CALL cmfe_OutputSetOn("diagnostics.txt",Err)
 
   !Get the computational nodes information
@@ -551,15 +568,12 @@ PROGRAM LAPLACE_EQUATION
   !IF(whichBasis/=2)?
   !IF (numberOfGlobalZElements >=1 .AND. NumberOfComputationalNodes==1) &
   !Compute lines also in 3D (default false) - there will be an error msg if -np >1:
-  CALL cmfe_Decomposition_CalculateLinesSet(Decomposition, .TRUE., Err)
+  !CALL cmfe_Decomposition_CalculateLinesSet(Decomposition, .TRUE., Err)
+  !Leave default if debugging FV_lorenzo_merged.
 
   CALL cmfe_Decomposition_TypeSet(decomposition,decompositionType,err)
   CALL cmfe_Decomposition_NumberOfDomainsSet(Decomposition,NumberOfComputationalNodes,Err)
    
-  SetDecompositionDistributed = .FALSE. ! True only works with new implementation, false works with both.
-                                        ! Affects decomposition for 4 nodes (below).
-                                        ! NOT SURE WHAT IT MEANS THOUGH!!!!!!!!!!
-
   IF(decompositionType==CMFE_DECOMPOSITION_USER_DEFINED_TYPE) THEN
     IF (numberOfGlobalZElements >=1) THEN
      ! 3D, max -np 2 for 2 elements
@@ -663,9 +677,22 @@ PROGRAM LAPLACE_EQUATION
 
   !Variable, MaxDepth, MaxArrayLength
   !CALL cmfe_PrintDecomposition(Decomposition,3,100,Err)
-  
-  !PRINT *, "Abort program in laplace_equation.f90:329"
-  !STOP
+
+      DO GlobalElementNo = 1,NumberOfElements
+        CALL cmfe_Decomposition_ElementDomainGet(RegionUserNumber,MeshUserNumber,DecompositionUserNumber,&
+          & GlobalElementNo, domain, err)
+        ! Only LOCAL elements can be updated
+        IF (ComputationalNodeNumber == domain) THEN
+         !SUBROUTINE cmfe_Field_ParameterSetUpdateElementIntgObj (field,variableType,fieldSetType,userElementNumber,componentNumber, &
+         !  & value,err)
+          PRINT *, "Rank that owns element:"
+          PRINT *, domain, GlobalElementNo
+        END IF
+      END DO
+
+
+  PRINT *, "Abort program after successful decomposition."
+  STOP
  
   !-----------------------------------------------------------------------------------------------------------
   !GEOMETRIC FIELD
@@ -679,11 +706,11 @@ PROGRAM LAPLACE_EQUATION
   CALL cmfe_Field_MeshDecompositionSet(GeometricField,Decomposition,Err)
   !Set the domain to be used by the field components.
  
-  ! Components of the geometric field
-  ! ndim components nodal-based
-  numberOfComponents = 2
+  !Components of the geometric field:
+  !ndim components nodal-based
+  !numberOfComponents = 2
+  !Option: add 1 element-based +1 constant but NO solve if these components added! -> Moved above.
   IF(numberOfGlobalZElements/=0) numberOfComponents = numberOfComponents+1
-  ! Option: add 1 element-based +1 constant but NO solve if these components added!
   ! Just for decomposition test purposes!!
 
   !1 vbl, components: 2(3)x Mesh (node-dofs), 1 x Element-based, 1 x constant 
@@ -1027,8 +1054,11 @@ PROGRAM LAPLACE_EQUATION
 
     CALL cmfe_Field_ParameterSetUpdateStart(geometricField, &
       & CMFE_FIELD_U_VARIABLE_TYPE,CMFE_FIELD_VALUES_SET_TYPE,Err) 
+    ! Posts irecv and isend from and to adj domains for local ghosts
+    ! Operations on internal dofs could happen in between
     CALL cmfe_Field_ParameterSetUpdateFinish(geometricField, &
       & CMFE_FIELD_U_VARIABLE_TYPE,CMFE_FIELD_VALUES_SET_TYPE,Err)
+    ! Waits for end of ghost communication
 
     WRITE(*,*) "Update completed."
     
