@@ -154,6 +154,7 @@ PROGRAM LAPLACE_EQUATION
     IF(status>0) CALL HandleError("Error for command argument 8.")
     READ(commandArgument(1:argumentLength),*) useGeneratedMesh
   ELSE
+
     !If there are not enough arguments default the problem specification
     numberOfGlobalXElements=4!4!2!2!2!
     numberOfGlobalYElements=4!4!1!2!1!
@@ -163,24 +164,31 @@ PROGRAM LAPLACE_EQUATION
     whichBasis = 2                 ! For MANUAL mesh, decide if
                                    ! - all Lagrange linear/quad (2),
                                    ! - all Hermite (3)
-                                   ! - Hermite/Lagrange LINEAR (1) (cf. Benjamin's example)
-                                   ! Generated mesh: only 2 and 3 (NO mix)!!!  
+                                   ! - mixed Hermite/Lagrange LINEAR (1)
+                                   ! Generated mesh: only 2 and 3 (NO mix)!!!
+    !If Hermite elements 3D we need LINES computation. Default 3D is false.
+    !Set below to TRUE manually, will return an error msg if -np>1.
+    !3D lines computation still missing!
+
     equationSparsity = CMFE_EQUATIONS_FULL_MATRICES ! Sparsity of the EQUATIONS matrix
-    solverSparsity   = CMFE_SOLVER_SPARSE_MATRICES ! Sparsity of the SOLVER matrix
-    numberOfComponents = 2!
-    ! -2 NEVER CHANGE! Unless testing hash tables.
-    ! MUST be 2 for FV_lorenzo_merged, but also error occurring!!!
+
+    solverSparsity   = CMFE_SOLVER_SPARSE_MATRICES !CMFE_SOLVER_FULL_MATRICES
+                                                   !Sparsity of the SOLVER matrix
+    numberOfComponents = 2
+    ! -2 Standard 2 node-based components (automatically increased to 3 if 3D).
     ! -3 add 1 element-based
-    ! -4 add 1 constant-based but NO solve if these components added!
-    ! CMFE_SOLVER_FULL_MATRICES
-    useGeneratedMesh = .TRUE. ! Manual mesh only for 2D case, see picture in doc
-  ! User-defined or automatic decomposition
+    ! -4 add 1 constant-based
+    ! Decomposition OK also with >2. cmfe_Field_CreateFinish must be tested!
+    ! Solution can be computed ONLY with node-based components though!!!
+
+    useGeneratedMesh = .TRUE. ! Manual mesh (.FALSE.) only for 2D case, see picture in docs/.
+
+    ! User-defined or automatic decomposition
     decompositionType = CMFE_DECOMPOSITION_USER_DEFINED_TYPE!CMFE_DECOMPOSITION_CALCULATED_TYPE!!
 
-    SetDecompositionDistributed = .TRUE.!.FALSE.! TRUE ONLY for Benjamin!!!
+    SetDecompositionDistributed = .TRUE. !.FALSE.! Set to TRUE ONLY for new implementation (FV_merged).
                                          ! True only works with new implementation, false works with both.
-                                         ! Affects decomposition for 4 nodes (below).
-
+                                         ! Affects user-defined decomposition for -np 4 nodes (see below).
   END IF
 
 
@@ -192,45 +200,13 @@ PROGRAM LAPLACE_EQUATION
 
   CALL cmfe_RandomSeedsSet(9999,Err)
   
-  !CALL cmfe_DiagnosticsSetOn(CMFE_IN_DIAG_TYPE,[1,2],"",&
-  !  & ["DOMAIN_MAPPINGS_NODES_CALCULATE"],Err)
-
-  !CALL cmfe_DiagnosticsSetOn(CMFE_FROM_DIAG_TYPE,[3],"",&
-  !  & ["DECOMPOSITION_CREATE_FINISH"],Err)
-
-  !CALL cmfe_DiagnosticsSetOn(CMFE_IN_DIAG_TYPE,[1,2],"",&
-  !  & ["DECOMPOSITION_ADJACENT_DOMAINS_CALCULATE"],Err)
-
-  ! Print out of nodes/els mapping (old implementation) + dofs (new implementation)
-  !CALL cmfe_DiagnosticsSetOn(CMFE_IN_DIAG_TYPE,[2],"Diagnostics",&
-  !  & ["FIELD_MAPPINGS_CALCULATE"],Err)
-
-  ! Uncomment this if on one of the merge branches! 
-  ! Determine name of diagnostics file according to branch
-  !SELECT CASE(CMFE_BENJAMIN)
-  !CASE (CMFE_B_ORIGINAL)
-  !  diagFilename = "Diag_original"
-  !CASE (CMFE_B_MERGE)
-  !  diagFilename = "Diag_merge"
-  !CASE (CMFE_B_FACES)
-  !  diagFilename = "Diag_faces"
-  !CASE DEFAULT
-  !  diagFilename = "Diag_other"
-  !END SELECT
   diagFilename = "Diagnostics" !Develop"
 
-  ! Do this to get name of branch and specify diagnostic name...???
-  !CALL EXECUTE_COMMAND_LINE("cd ~/software/opencmiss/opencmiss/src/iron/")
-  !CALL EXECUTE_COMMAND_LINE("git branch | grep \* | cut -d ' ' -f2")
-  !CALL EXECUTE_COMMAND_LINE("cd ~/Desktop/functional_tests/examples_build/laplace_equation/laplace_equation-build/")
-
-!  CALL cmfe_DiagnosticsSetOn(CMFE_IN_DIAG_TYPE,[1,2,3],TRIM(diagFileName),&
   CALL cmfe_DiagnosticsSetOn(CMFE_IN_DIAG_TYPE,[1,2,3],TRIM(diagFileName),&
     & ["DOMAIN_MAPPINGS_NODES_CALCULATE               ", &
     &  "DOMAIN_MAPPINGS_INITIALISE                    ", &
     &  "MESH_TOPOLOGY_ELEMENTS_CREATE_FINISH          ", &
     &  "DECOMPOSITION_TOPOLOGY_LINES_CALCULATE        ", &
-!    &  "DECOMPOSITION_TOPOLOGY_FACES_CALCULATE"], Err)
     &  "FIELD_MAPPINGS_CALCULATE                      ", &
     &  "SOLVER_MATRIX_STRUCTURE_CALCULATE             ", &
     &  "SOLVER_MAPPING_CALCULATE                      ", &
@@ -434,7 +410,6 @@ PROGRAM LAPLACE_EQUATION
 
     PRINT *, "Basis set start!"
     ! Set the basis
-    !IF (.FALSE.) THEN
     SELECT CASE (whichBasis)
     CASE(1) ! mix linear-Hermite  
       SELECT CASE (numberOfElements) 
@@ -469,7 +444,6 @@ PROGRAM LAPLACE_EQUATION
 
     PRINT *, "Basis set finish!"
 
-  
     ! Define nodes for the mesh
     CALL cmfe_Nodes_Initialise(Nodes,Err)
 
@@ -490,10 +464,6 @@ PROGRAM LAPLACE_EQUATION
       CALL cmfe_MeshElements_NodesSet(MeshElements, 1, [1,2,5,6], Err)
       CALL cmfe_MeshElements_NodesSet(MeshElements, 2, [2,3,6,7], Err)
       CALL cmfe_MeshElements_NodesSet(MeshElements, 3, [3,4,7,8], Err)
-      ! Moved up
-      !CALL cmfe_MeshElements_BasisSet(MeshElements,1,LagrangeBasis,Err)
-      !CALL cmfe_MeshElements_BasisSet(MeshElements,2,HermiteBasis,Err)
-      !CALL cmfe_MeshElements_BasisSet(MeshElements,3,LagrangeBasis,Err)
     ELSE
 
     ! Distribute nodes among elements for a SQUARE(cf. picture)
@@ -547,7 +517,7 @@ PROGRAM LAPLACE_EQUATION
 
   END IF ! generated mesh or manual mesh
 
-  ! Check the nodes distribution among elements 
+  ! Check the nodes distribution among elements:
   ! Use diagnostic MESH_TOPOLOGY_ELEMENTS_CREATE_FINISH!
   ! global element numbers
   !13 14 15 16
@@ -563,13 +533,12 @@ PROGRAM LAPLACE_EQUATION
   CALL cmfe_Decomposition_CreateStart(DecompositionUserNumber,Mesh,Decomposition,Err)
   ! Set the decomposition to be a general decomposition with the specified number of domains
 
-  !If Hermite elements 3D we need lines computation. Default 3D is false.
-  !Fixed for now only for -np 1
+  !If Hermite elements 3D we need LINES computation. Default 3D is false.
+  !Fixed for now only for -np 1!
   !IF(whichBasis/=2)?
   !IF (numberOfGlobalZElements >=1 .AND. NumberOfComputationalNodes==1) &
   !Compute lines also in 3D (default false) - there will be an error msg if -np >1:
-  !CALL cmfe_Decomposition_CalculateLinesSet(Decomposition, .TRUE., Err)
-  !Leave default if debugging FV_lorenzo_merged.
+  CALL cmfe_Decomposition_CalculateLinesSet(Decomposition, .TRUE., Err)
 
   CALL cmfe_Decomposition_TypeSet(decomposition,decompositionType,err)
   CALL cmfe_Decomposition_NumberOfDomainsSet(Decomposition,NumberOfComputationalNodes,Err)
@@ -674,22 +643,22 @@ PROGRAM LAPLACE_EQUATION
  
   !Destroy the mesh now that we have decomposed it
   !CALL cmfe_Mesh_Destroy(Mesh,Err)
-
   !Variable, MaxDepth, MaxArrayLength
   !CALL cmfe_PrintDecomposition(Decomposition,3,100,Err)
 
-      DO GlobalElementNo = 1,NumberOfElements
-        CALL cmfe_Decomposition_ElementDomainGet(RegionUserNumber,MeshUserNumber,DecompositionUserNumber,&
-          & GlobalElementNo, domain, err)
+  !Possibility to test cmfe_Decomposition_ElementDomainGet for new implementation.
+  !Returns -1 if element is not local.
+  IF (.FALSE.) THEN
+    DO GlobalElementNo = 1,NumberOfElements
+      CALL cmfe_Decomposition_ElementDomainGet(RegionUserNumber,MeshUserNumber,DecompositionUserNumber,&
+        & GlobalElementNo, domain, err)
         ! Only LOCAL elements can be updated
-        IF (ComputationalNodeNumber == domain) THEN
-         !SUBROUTINE cmfe_Field_ParameterSetUpdateElementIntgObj (field,variableType,fieldSetType,userElementNumber,componentNumber, &
-         !  & value,err)
-          PRINT *, "Rank that owns element:"
-          PRINT *, domain, GlobalElementNo
-        END IF
-      END DO
-
+      IF (ComputationalNodeNumber == domain) THEN
+        PRINT *, "Rank that owns element:"
+        PRINT *, domain, GlobalElementNo
+      END IF
+    END DO
+  END IF
 
   PRINT *, "Abort program after successful decomposition."
   STOP
@@ -716,16 +685,16 @@ PROGRAM LAPLACE_EQUATION
   !1 vbl, components: 2(3)x Mesh (node-dofs), 1 x Element-based, 1 x constant 
   CALL cmfe_Field_NumberOfComponentsSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,numberOfComponents,Err)
  
-  !SUBROUTINE FIELD_COMPONENT_MESH_COMPONENT_SET(FIELD,VARIABLE_TYPE,COMPONENT_NUMBER,MESH_COMPONENT_NUMBER,ERR,ERROR,*)
-  ! node-based interpolation
   DO count_components=1,2
-    CALL cmfe_Field_ComponentMeshComponentSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,count_components,1,Err)
+    CALL cmfe_Field_ComponentMeshComponentSet &
+      & (GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,count_components,1,Err)
   END DO
   count_components=count_components-1
 
   IF(numberOfGlobalZElements/=0) THEN
     count_components = count_components +1
-    CALL cmfe_Field_ComponentMeshComponentSet(geometricField,CMFE_FIELD_U_VARIABLE_TYPE,count_components,1,err)
+    CALL cmfe_Field_ComponentMeshComponentSet &
+      & (geometricField,CMFE_FIELD_U_VARIABLE_TYPE,count_components,1,err)
   END IF
 
   ! other interpolations
@@ -740,15 +709,11 @@ PROGRAM LAPLACE_EQUATION
       & (GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,count_components,CMFE_FIELD_CONSTANT_INTERPOLATION,Err)
   END IF
 
-  !!CALL cmfe_Field_ComponentInterpolationSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,5,CMFE_FIELD_NODE_BASED_INTERPOLATION,Err)
-  !!CALL cmfe_Field_ComponentInterpolationSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,6,CMFE_FIELD_CONSTANT_INTERPOLATION,Err)
-  !!CALL cmfe_Field_ComponentInterpolationSet(GeometricField,CMFE_FIELD_U_VARIABLE_TYPE,7,CMFE_FIELD_ELEMENT_BASED_INTERPOLATION,Err)
+  !Finish creating the field
+  CALL cmfe_Field_CreateFinish(GeometricField,Err)
 
   WRITE (*,*) "Created geometric field components"
   WRITE (*,*) count_components
-  
-  !Finish creating the field
-  CALL cmfe_Field_CreateFinish(GeometricField,Err)
 
   PRINT *, "Ready to update geometric field parameters!"
   !PRINT *, "Print field GeometricField"
