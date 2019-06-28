@@ -659,9 +659,6 @@ PROGRAM LAPLACE_EQUATION
       END IF
     END DO
   END IF
-
-  PRINT *, "Abort program after successful decomposition."
-  STOP
  
   !-----------------------------------------------------------------------------------------------------------
   !GEOMETRIC FIELD
